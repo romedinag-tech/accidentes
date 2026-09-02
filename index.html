@@ -140,6 +140,8 @@ tr.clk:hover td{background:var(--surface-alt)}
 footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid var(--line);padding-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .leaflet-container{background:var(--surface-alt)}
+/* Basemap OSM: en modo oscuro se oscurece por filtro CSS (sin depender de tiles oscuros externos) */
+:root[data-theme="dark"] .basemap-osm{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.95) saturate(.75)}
 </style>
 </head>
 <body>
@@ -230,7 +232,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 
   <footer>
     <span id="foot"></span>
-    <span>Fuente: <a href="https://mapas-conaset.opendata.arcgis.com" target="_blank" rel="noopener">CONASET</a> · Cartografía DPA Censal (Esri Chile) · Mapa © OpenStreetMap, CARTO, Esri</span>
+    <span>Fuente: <a href="https://mapas-conaset.opendata.arcgis.com" target="_blank" rel="noopener">CONASET</a> · Cartografía DPA Censal (Esri Chile) · Mapa base © OpenStreetMap · Satélite © Esri</span>
   </footer>
 </div>
 
@@ -385,14 +387,14 @@ function renderTop(A){
 
 /* ---------- Mapa ---------- */
 let map,comunaLayer,regionLayer,heatLayer,curAgg,lastRegion=null,lastComuna=null;
-let baseLight,baseDark,baseSat,baseLabels;
+let baseStreets,baseSat,baseLabels;
 function initMap(){
   map=L.map('map',{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([-38,-71.5],4);
   map.attributionControl.setPrefix('');
-  baseLight=L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,attribution:'© OSM © CARTO'});
-  baseDark =L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,attribution:'© OSM © CARTO'});
-  baseSat  =L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'© Esri'});
-  baseLabels=L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,pane:'shadowPane',opacity:.9});
+  // Proveedores sin API key: OpenStreetMap (calles) + Esri (satélite y referencias).
+  baseStreets=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,className:'basemap-osm',attribution:'© OpenStreetMap'});
+  baseSat    =L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'© Esri, Maxar'});
+  baseLabels =L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,pane:'shadowPane',opacity:.9});
   applyBasemap();
   regionLayer=L.geoJSON(D.geoRegiones,{style:{color:css('--ink-lo'),weight:1,fill:false,opacity:.55}}).addTo(map);
   comunaLayer=L.geoJSON(D.geoComunas,{style:featStyle,onEachFeature:(f,l)=>{
@@ -403,10 +405,9 @@ function initMap(){
   }}).addTo(map);
 }
 function applyBasemap(){
-  [baseLight,baseDark,baseSat,baseLabels].forEach(l=>l&&map.hasLayer(l)&&map.removeLayer(l));
-  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  [baseStreets,baseSat,baseLabels].forEach(l=>l&&map.hasLayer(l)&&map.removeLayer(l));
   if(state.base==='satelite'){baseSat.addTo(map);baseLabels.addTo(map);}
-  else{(dark?baseDark:baseLight).addTo(map);}
+  else{baseStreets.addTo(map);}   // en oscuro se oscurece por CSS (.basemap-osm), sin cambiar de proveedor
 }
 const metricLabel={s:'siniestros',m:'fallecidos',g:'lesionados graves',tasa:'fallecidos por 100 mil hab.'};
 function metricVal(v,cut){if(!v)return 0;if(state.metric==='tasa'){const c=D.comunas[comIdxByCut[cut]];const p=c?c.pob:0;return p?v.m/p*100000:0;}return v[state.metric]||0;}
@@ -482,7 +483,7 @@ function isDark(){return document.documentElement.getAttribute('data-theme')==='
 themeBtn.textContent=isDark()?'☀':'☾';
 themeBtn.onclick=()=>{const d=!isDark();document.documentElement.setAttribute('data-theme',d?'dark':'light');
   try{localStorage.setItem('theme-acc',d?'dark':'light');}catch(e){}
-  themeBtn.textContent=d?'☀':'☾';applyBasemap();if(regionLayer)regionLayer.setStyle({color:css('--ink-lo')});render();};
+  themeBtn.textContent=d?'☀':'☾';if(regionLayer)regionLayer.setStyle({color:css('--ink-lo')});render();};
 $('#cbBtn').onclick=()=>{state.cb=!state.cb;PAL_T=state.cb?PAL_T_CB:PAL_T_NORM;$('#cbBtn').style.color=state.cb?'#ff9d2f':'';render();};
 
 fillComunas();
