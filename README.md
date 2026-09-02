@@ -23,8 +23,19 @@ Descarga: `scripts/descargar_personas.py` (paso = maxRecordCount del servicio) �
 `scripts/convertir_personas.py`. Se encontró vía los dashboards ArcGIS "Usuarios vulnerables" y
 "Características de los participantes".
 
-**Dos pestañas:** *Siniestros* (nivel siniestro, con mapa) y *Personas accidentadas* (nivel persona:
-grupo etario, pirámide edad×sexo, tipo de usuario, rol; sin mapa porque no trae geometría).
+**Tres pestañas:** *Siniestros* (nivel siniestro, con mapa Leaflet), *Personas accidentadas* (nivel
+persona: grupo etario, pirámide edad×sexo, tipo de usuario, rol) y ***Análisis espacial* (deck.gl)** con
+5 modalidades avanzadas de visualización espacial:
+
+1. **Hexágonos 3D (H3)** — `H3HexagonLayer` + `h3-js`, resolución adaptativa al zoom, extrusión (altura ∝ magnitud).
+2. **Contornos KDE** — `ContourLayer` con isolíneas/bandas discretas (anillos de densidad).
+3. **Red vial (linear referencing)** — accidentes pegados al tramo de calle más cercano (precómputo offline,
+   `scripts/segmentar_red_vial.py`, snapping a la Red Vial Nacional, 98,6% de cobertura), color/grosor por frecuencia o severidad.
+4. **Riesgo bivariado** — coropleta comunal 3×3 (población/exposición × siniestros) que revela el riesgo desproporcionado.
+5. **Clústeres dinámicos** — `supercluster`: burbujas con conteo a escala macro → puntos individuales por modo al hacer zoom.
+
+Requiere embeber los ~436 mil puntos individuales (`data.puntos`) y los tramos viales (`data.redVial`);
+el bundle sube a ~35 MB pero GitHub Pages lo sirve gzipped (~7,5 MB). Librerías por CDN: deck.gl, h3-js, supercluster.
 
 Dos vistas de análisis focalizado:
 - **Tendencia por ciudad segmentada por tipo.** Al elegir una comuna (clic en el mapa o selector),

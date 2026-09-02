@@ -97,6 +97,33 @@ def geojson(path, cols, tol):
 GJ_COMUNAS = geojson(f'{P}/cartografia/comunas.parquet', ['cut_com'], 0.02)
 GJ_REGIONES = geojson(f'{P}/cartografia/regiones.parquet', ['cod_region'], 0.03)
 
+# ---------- Puntos individuales (para hexágonos 3D, contornos KDE y clústeres) ----------
+# Compacto: [lat, lon, año-offset, cod_region, modoIdx, tipoIdx, zona, fallecidos]
+pts = q(f"""SELECT round(lat,4) la, round(lon,4) lo, anio, cod_region, modo, coalesce(tipo,'SIN DATO') tipo,
+                   {ZONA} zona, least(coalesce(fallecidos,0),9) f
+            FROM {SRC} WHERE {WHERE} AND lat IS NOT NULL AND lon IS NOT NULL
+              AND lat BETWEEN -56 AND -17 AND lon BETWEEN -110 AND -66""")
+PUNTOS = [[r.la, r.lo, int(r.anio) - ANIO_MIN, int(r.cod_region), modo_idx[r.modo], tipo_idx.get(r.tipo, 0), int(r.zona), int(r.f)]
+          for r in pts.itertuples() if r.modo in modo_idx]
+
+# ---------- Red vial segmentada (linear referencing, precómputo offline) ----------
+RED_VIAL = None
+rvpath = os.path.join(BASE, 'data', 'parquet', 'red_vial_siniestros.parquet')
+if os.path.exists(rvpath):
+    rv = gpd.read_parquet(rvpath)
+    if rv.crs and rv.crs.to_epsg() != 4326:
+        rv = rv.to_crs(4326)
+    RED_VIAL = []
+    for r in rv.itertuples():
+        g = r.geometry
+        if g is None or g.is_empty:
+            continue
+        parts = list(g.geoms) if g.geom_type == 'MultiLineString' else [g]
+        for ln in parts:
+            coords = [[round(x, 4), round(y, 4)] for x, y in ln.coords]
+            if len(coords) >= 2:
+                RED_VIAL.append([coords, int(r.n), int(r.f), int(r.cod_region)])
+
 # ---------- FASE 2: personas accidentadas (base persona_vehiculo) ----------
 PERS = None
 ppath = os.path.join(BASE, 'data', 'parquet', 'personas.parquet')
@@ -142,6 +169,7 @@ DATA = {
     'factTipo': FACT_TIPO, 'factCausa': FACT_CAUSA, 'factMes': FACT_MES, 'factHora': FACT_HORA, 'factDia': FACT_DIA,
     'gridHot': GRID_HOT, 'geoComunas': GJ_COMUNAS, 'geoRegiones': GJ_REGIONES,
     'personas': PERS,
+    'puntos': PUNTOS, 'redVial': RED_VIAL,
 }
 out = os.path.join(BASE, 'data_bundle.js')
 with open(out, 'w', encoding='utf-8') as f:
@@ -153,4 +181,5 @@ mb = os.path.getsize(out) / 1e6
 print(f'data_bundle.js -> {mb:.2f} MB')
 print(f'  factGeo={len(FACT_GEO)} factTipo={len(FACT_TIPO)} factCausa={len(FACT_CAUSA)} factMes={len(FACT_MES)} factHora={len(FACT_HORA)} factDia={len(FACT_DIA)} gridHot={len(GRID_HOT)}')
 print(f'  comunas={len(COMUNAS)} regiones={len(REGIONES)} tipos={len(TIPOS)} causas={len(CAUSAS)} modos={len(MODOS)}')
+print(f'  puntos={len(PUNTOS)} redVial={len(RED_VIAL) if RED_VIAL else 0}')
 con.close()
