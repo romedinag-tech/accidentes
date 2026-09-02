@@ -53,16 +53,36 @@ h1,h2,h3{font-family:var(--font-display);color:var(--ink);letter-spacing:-.01em;
 .num{font-family:var(--font-data);font-variant-numeric:tabular-nums}
 a{color:var(--accent)}
 
-/* Header institucional */
-.apptop{display:flex;align-items:center;gap:16px;padding:14px 26px;background:var(--grad);color:#fff}
-.apptop .brand{font-family:var(--font-display);font-weight:700;font-size:1.2rem;line-height:1.1}
-.apptop .sub{font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;opacity:.85;font-weight:600;margin-top:2px}
-.apptop .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+/* Header institucional — título grande y centrado */
+.apptop{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;
+  padding:34px 26px 28px;background:var(--grad);color:#fff}
+.apptop .emblem{width:44px;height:44px;opacity:.9;margin-bottom:4px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.apptop .brand{font-family:var(--font-display);font-weight:700;font-size:2.5rem;line-height:1.04;letter-spacing:-.02em}
+.apptop .sub{font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;opacity:.82;font-weight:600;margin-top:2px}
+.apptop .actions{position:absolute;top:16px;right:20px;display:flex;align-items:center;gap:10px}
 .live-badge{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .live-badge .led{width:8px;height:8px;border-radius:50%;background:#ff6a1a;box-shadow:var(--led,0 0 6px #ff6a1a)}
 .hdr-btn{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;
   height:34px;min-width:34px;padding:0 10px;border-radius:9px;cursor:pointer;font-size:.95rem}
 .hdr-btn:hover{background:rgba(255,255,255,.22)}
+@media(max-width:660px){.apptop{padding:20px 18px}.apptop .brand{font-size:1.55rem}
+  .apptop .actions{position:static;margin-bottom:8px}.apptop .emblem{width:36px;height:36px}}
+
+/* Sistema de íconos (sprite SVG inline, trazo currentColor) */
+.ic{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
+.card h2 .ic,.grp-hd .ic{color:var(--accent)}
+
+/* Navegación por pestañas (vista) */
+.tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:13px;
+  padding:6px;box-shadow:var(--sh-sm);width:fit-content;max-width:100%;margin:0 auto 20px;flex-wrap:wrap;justify-content:center}
+:root[data-theme="dark"] .tabs{background-image:var(--card-grad);box-shadow:var(--card-3d)}
+.tabs button{display:inline-flex;align-items:center;gap:8px;border:none;background:none;color:var(--ink-mid);
+  font-family:var(--font-ui);font-weight:600;font-size:.92rem;padding:9px 17px;border-radius:9px;cursor:pointer;transition:.15s}
+.tabs button:hover{background:var(--surface-alt);color:var(--ink)}
+.tabs button.on{background:var(--navy);color:#fff;box-shadow:0 2px 8px rgba(14,35,56,.18)}
+:root[data-theme="dark"] .tabs button.on{color:#0a0d13}
+.tabs button .ic{width:17px;height:17px}
 
 .wrap{max-width:1500px;margin:0 auto;padding:22px 26px 60px}
 .lead{color:var(--ink-mid);max-width:74ch;font-size:.95rem;margin:2px 0 0}
@@ -83,7 +103,8 @@ a{color:var(--accent)}
   background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)}
 :root[data-theme="dark"] .filters{background-image:var(--card-grad);box-shadow:var(--card-3d)}
 .fg{display:flex;flex-direction:column;gap:6px}
-.fg label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-lo);font-weight:600}
+.fg label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-lo);font-weight:600;display:inline-flex;align-items:center;gap:5px}
+.fg label .ic{width:12px;height:12px;color:var(--accent);opacity:.75;vertical-align:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{background:var(--surface-alt);border:1px solid var(--line);color:var(--ink-mid);border-radius:999px;
   padding:6px 13px;cursor:pointer;font-size:.85rem;font-weight:600;user-select:none;transition:.15s}
@@ -99,7 +120,9 @@ select{background:var(--surface-alt);border:1px solid var(--line);color:var(--in
 
 /* KPIs */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px;margin-bottom:22px}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
+.kpi{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
+.kpi .kic{position:absolute;top:14px;right:15px;color:var(--accent);opacity:.42}
+.kpi .kic .ic{width:22px;height:22px}
 :root[data-theme="dark"] .kpi{background-image:var(--card-grad);box-shadow:var(--card-3d)}
 .kpi .n{font-family:var(--font-data);font-size:1.7rem;font-weight:700;color:var(--navy);line-height:1.1;letter-spacing:-.02em}
 .kpi .l{color:var(--ink-mid);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:4px}
@@ -110,7 +133,8 @@ select{background:var(--surface-alt);border:1px solid var(--line);color:var(--in
 @media(max-width:1050px){.grid{grid-template-columns:1fr}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;box-shadow:var(--sh)}
 :root[data-theme="dark"] .card{background-image:var(--card-grad);box-shadow:var(--card-3d)}
-.card h2{font-size:1.08rem;margin:0 0 3px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.card h2{font-size:1.08rem;margin:0 0 3px;display:flex;align-items:center;gap:9px}
+.card h2 .hint{margin-left:auto;text-align:right}
 .card h3{font-size:1.02rem;margin:16px 0 3px}
 .card .hint,.chint{font-family:var(--font-ui);font-weight:400;font-size:.72rem;color:var(--ink-lo);letter-spacing:0}
 .card p.desc{color:var(--ink-mid);font-size:.82rem;margin:.15rem 0 .7rem;max-width:70ch}
@@ -151,38 +175,50 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><line x1="8" y1="6" x2="8.01" y2="6"/><line x1="12" y1="6" x2="12.01" y2="6"/><line x1="16" y1="6" x2="16.01" y2="6"/><line x1="8" y1="10" x2="8.01" y2="10"/><line x1="12" y1="10" x2="12.01" y2="10"/><line x1="16" y1="10" x2="16.01" y2="10"/><line x1="8" y1="14" x2="8.01" y2="14"/><line x1="12" y1="14" x2="12.01" y2="14"/><line x1="16" y1="14" x2="16.01" y2="14"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a1 1 0 0 0-.8-.4H5.24a2 2 0 0 0-1.8 1.1l-.8 1.63A6 6 0 0 0 2 12.42V16h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+  <symbol id="i-bar" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-cross" viewBox="0 0 24 24"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></symbol>
+  <symbol id="i-percent" viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+</svg>
 <header class="apptop">
-  <div>
-    <div class="brand">Siniestros de Tránsito en Chile</div>
-    <div class="sub" id="hsub">Base consolidada CONASET · 2020–2025</div>
-  </div>
-  <div class="right">
-    <span class="live-badge"><span class="led"></span> Datos abiertos</span>
+  <div class="actions">
+    <span class="live-badge"><svg class="ic" style="width:13px;height:13px"><use href="#i-globe"/></svg> Datos abiertos</span>
     <button class="hdr-btn" id="cbBtn" title="Paleta para daltonismo" aria-label="Paleta daltónica">◐</button>
     <button class="hdr-btn" id="themeBtn" title="Tema claro / oscuro" aria-label="Cambiar tema">☾</button>
   </div>
+  <svg class="emblem"><use href="#i-alert"/></svg>
+  <div class="brand">Siniestros de Tránsito en Chile</div>
+  <div class="sub" id="hsub">Base consolidada CONASET · 2020–2025</div>
 </header>
 
 <div class="wrap">
-  <p class="lead" id="lead"></p>
-
-  <details class="method-drawer">
-    <summary>Fuente, cobertura y metodología</summary>
-    <div class="method-body" id="method"></div>
-  </details>
-
-  <div class="tabs" id="mainTabs" style="margin:8px 0 14px">
-    <button data-v="siniestros" class="on">Siniestros</button>
-    <button data-v="personas">Personas accidentadas</button>
-    <button data-v="espacial">Análisis espacial</button>
+  <div class="tabs" id="mainTabs">
+    <button data-v="siniestros" class="on"><svg class="ic"><use href="#i-alert"/></svg>Siniestros</button>
+    <button data-v="personas"><svg class="ic"><use href="#i-users"/></svg>Personas accidentadas</button>
+    <button data-v="espacial"><svg class="ic"><use href="#i-layers"/></svg>Análisis espacial</button>
   </div>
 
   <div class="filters">
-    <div class="fg"><label>Años</label><div class="chips" id="fAnios"></div></div>
-    <div class="fg"><label>Región</label><select id="fRegion"></select></div>
-    <div class="fg" id="fgComuna"><label>Comuna / ciudad</label><select id="fComuna"></select></div>
-    <div class="fg" id="fgModo"><label>Modo involucrado</label><select id="fModo"></select></div>
-    <div class="fg"><label>Zona</label><select id="fZona"></select></div>
+    <div class="fg"><label><svg class="ic"><use href="#i-calendar"/></svg>Años</label><div class="chips" id="fAnios"></div></div>
+    <div class="fg"><label><svg class="ic"><use href="#i-pin"/></svg>Región</label><select id="fRegion"></select></div>
+    <div class="fg" id="fgComuna"><label><svg class="ic"><use href="#i-building"/></svg>Comuna / ciudad</label><select id="fComuna"></select></div>
+    <div class="fg" id="fgModo"><label><svg class="ic"><use href="#i-car"/></svg>Modo involucrado</label><select id="fModo"></select></div>
+    <div class="fg"><label><svg class="ic"><use href="#i-grid"/></svg>Zona</label><select id="fZona"></select></div>
     <div class="fg"><label>&nbsp;</label><button class="tbtn" id="reset">Limpiar filtros</button></div>
   </div>
   <div id="breadcrumb"></div>
@@ -192,7 +228,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 
   <div class="grid">
     <div class="card">
-      <h2>Mapa <span class="hint" id="mapHint"></span></h2>
+      <h2><svg class="ic"><use href="#i-map"/></svg>Mapa <span class="hint" id="mapHint"></span></h2>
       <p class="desc" id="mapDesc"></p>
       <div class="maprow">
         <span class="seglab">Vista</span>
@@ -218,7 +254,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <div class="mapfoot" id="mapFoot"></div>
     </div>
     <div class="card">
-      <h2 id="anioTitle">Evolución anual por modo</h2>
+      <h2 id="anioTitle"><svg class="ic"><use href="#i-trend"/></svg>Evolución anual por modo</h2>
       <p class="desc">Altura total = siniestros del año; cada color, un modo involucrado. La línea marca los fallecidos.</p>
       <div class="chartbox"><canvas id="cAnio"></canvas></div>
       <h3>Siniestros por región</h3>
@@ -227,22 +263,22 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </div>
 
   <div class="charts2">
-    <div class="card"><h2>Por modo involucrado</h2><p class="desc">Peatón (atropello), motocicleta o bicicleta; el resto, vehículo. Un siniestro se asigna a un solo modo por prioridad (peatón &gt; moto &gt; bici &gt; vehículo).</p><div class="chartbox sm"><canvas id="cModo"></canvas></div></div>
-    <div class="card"><h2>Por tipo de siniestro</h2><div class="chartbox sm"><canvas id="cTipo"></canvas></div></div>
+    <div class="card"><h2><svg class="ic"><use href="#i-car"/></svg>Por modo involucrado</h2><p class="desc">Peatón (atropello), motocicleta o bicicleta; el resto, vehículo. Un siniestro se asigna a un solo modo por prioridad (peatón &gt; moto &gt; bici &gt; vehículo).</p><div class="chartbox sm"><canvas id="cModo"></canvas></div></div>
+    <div class="card"><h2><svg class="ic"><use href="#i-alert"/></svg>Por tipo de siniestro</h2><div class="chartbox sm"><canvas id="cTipo"></canvas></div></div>
   </div>
 
   <div class="charts2">
-    <div class="card"><h2>Principales causas <span class="hint">(clasificación agrupada CONASET)</span></h2><div class="chartbox sm"><canvas id="cCausa"></canvas></div></div>
-    <div class="card"><h2>Estacionalidad por mes</h2><div class="chartbox sm"><canvas id="cMes"></canvas></div></div>
+    <div class="card"><h2><svg class="ic"><use href="#i-list"/></svg>Principales causas <span class="hint">(clasificación agrupada CONASET)</span></h2><div class="chartbox sm"><canvas id="cCausa"></canvas></div></div>
+    <div class="card"><h2><svg class="ic"><use href="#i-calendar"/></svg>Estacionalidad por mes</h2><div class="chartbox sm"><canvas id="cMes"></canvas></div></div>
   </div>
 
   <div class="charts2">
-    <div class="card"><h2>Por hora del día</h2><div class="chartbox sm"><canvas id="cHora"></canvas></div></div>
-    <div class="card"><h2>Por día de la semana</h2><div class="chartbox sm"><canvas id="cDia"></canvas></div></div>
+    <div class="card"><h2><svg class="ic"><use href="#i-clock"/></svg>Por hora del día</h2><div class="chartbox sm"><canvas id="cHora"></canvas></div></div>
+    <div class="card"><h2><svg class="ic"><use href="#i-calendar"/></svg>Por día de la semana</h2><div class="chartbox sm"><canvas id="cDia"></canvas></div></div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
-    <h2>Comunas con más siniestros <span class="hint">clic para ver la ciudad</span></h2>
+    <h2><svg class="ic"><use href="#i-building"/></svg>Comunas con más siniestros <span class="hint">clic para ver la ciudad</span></h2>
     <div style="max-height:340px;overflow:auto"><table id="tTop"></table></div>
   </div>
   </div><!-- /viewSiniestros -->
@@ -252,23 +288,23 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     <div class="kpis" id="pkpis"></div>
     <div class="grid">
       <div class="card">
-        <h2>Accidentados por grupo etario</h2>
+        <h2><svg class="ic"><use href="#i-users"/></svg>Accidentados por grupo etario</h2>
         <p class="desc">Barras = personas accidentadas; la línea, fallecidos. Las personas mayores concentran una proporción de fallecidos muy superior a su peso en accidentados.</p>
         <div class="chartbox"><canvas id="cPersEdad"></canvas></div>
       </div>
       <div class="card">
-        <h2>Pirámide por edad y sexo</h2>
+        <h2><svg class="ic"><use href="#i-bar"/></svg>Pirámide por edad y sexo</h2>
         <p class="desc">Personas accidentadas por rango de edad; hombres a la izquierda, mujeres a la derecha.</p>
         <div class="chartbox" style="height:300px"><canvas id="cPersPir"></canvas></div>
       </div>
     </div>
     <div class="charts2">
-      <div class="card"><h2>Por tipo de usuario / vehículo</h2><p class="desc">Incluye automóvil, camioneta, moto, peatón, camión, bus/taxibus, bicicleta, etc.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuario"></canvas></div></div>
-      <div class="card"><h2>Fallecidos por tipo de usuario</h2><p class="desc">Mortalidad absoluta por modo — peatones y motociclistas pesan mucho más en fallecidos que en accidentados.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuarioF"></canvas></div></div>
+      <div class="card"><h2><svg class="ic"><use href="#i-car"/></svg>Por tipo de usuario / vehículo</h2><p class="desc">Incluye automóvil, camioneta, moto, peatón, camión, bus/taxibus, bicicleta, etc.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuario"></canvas></div></div>
+      <div class="card"><h2><svg class="ic"><use href="#i-pulse"/></svg>Fallecidos por tipo de usuario</h2><p class="desc">Mortalidad absoluta por modo — peatones y motociclistas pesan mucho más en fallecidos que en accidentados.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuarioF"></canvas></div></div>
     </div>
     <div class="charts2">
-      <div class="card"><h2>¿Cómo participaba la persona? <span class="hint">conductor · pasajero · peatón</span></h2><p class="desc">Posición de la persona en el siniestro: si iba conduciendo, como pasajero, o a pie (peatón). No indica responsabilidad.</p><div class="chartbox sm"><canvas id="cPersRol"></canvas></div></div>
-      <div class="card"><h2>Fallecidos por grupo etario</h2><div class="chartbox sm"><canvas id="cPersEdadF"></canvas></div></div>
+      <div class="card"><h2><svg class="ic"><use href="#i-user"/></svg>¿Cómo participaba la persona? <span class="hint">conductor · pasajero · peatón</span></h2><p class="desc">Posición de la persona en el siniestro: si iba conduciendo, como pasajero, o a pie (peatón). No indica responsabilidad.</p><div class="chartbox sm"><canvas id="cPersRol"></canvas></div></div>
+      <div class="card"><h2><svg class="ic"><use href="#i-pulse"/></svg>Fallecidos por grupo etario</h2><div class="chartbox sm"><canvas id="cPersEdadF"></canvas></div></div>
     </div>
   </div>
 
@@ -416,17 +452,17 @@ function renderKpis(A){
   const tasa=pob?A.T.m/pob*100000:null;
   const ambito=scopeName();
   let last;
-  if(state.comuna!=null)last=['Población (Censo 2017)',fmt(pob),'habitantes'];
-  else{let tc='—',tv=-1;for(const [ci,v] of A.porComuna)if(v.m>tv){tv=v.m;tc=D.comunas[ci].nombre;}last=['Comuna + fallecidos',tc,fmt(tv)+' fallecidos'];}
+  if(state.comuna!=null)last=['Población (Censo 2017)',fmt(pob),'habitantes','i-users'];
+  else{let tc='—',tv=-1;for(const [ci,v] of A.porComuna)if(v.m>tv){tv=v.m;tc=D.comunas[ci].nombre;}last=['Comuna + fallecidos',tc,fmt(tv)+' fallecidos','i-pin'];}
   const kpis=[
-    ['Siniestros',fmt(A.T.s),state.anios.size+' año(s) · '+ambito],
-    ['Fallecidos',fmt(A.T.m),'personas'],
-    ['Lesionados graves',fmt(A.T.g),'graves'],
-    ['Lesionados (total)',fmt(A.T.g+A.T.mg+A.T.l),'graves + menos graves + leves'],
-    ['Tasa de fallecidos',fmt1(tasa),'por 100 mil hab.'],
+    ['Siniestros',fmt(A.T.s),state.anios.size+' año(s) · '+ambito,'i-alert'],
+    ['Fallecidos',fmt(A.T.m),'personas','i-pulse'],
+    ['Lesionados graves',fmt(A.T.g),'graves','i-cross'],
+    ['Lesionados (total)',fmt(A.T.g+A.T.mg+A.T.l),'graves + menos graves + leves','i-cross'],
+    ['Tasa de fallecidos',fmt1(tasa),'por 100 mil hab.','i-percent'],
     last,
   ];
-  $('#kpis').innerHTML=kpis.map(k=>`<div class="kpi"><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
+  $('#kpis').innerHTML=kpis.map(k=>`<div class="kpi"><span class="kic"><svg class="ic"><use href="#${k[3]||'i-alert'}"/></svg></span><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
 }
 
 /* ---------- Charts ---------- */
@@ -608,7 +644,7 @@ function render(){
   const amb=scopeName();
   $('#mapHint').textContent='· '+amb;
   $('#mapDesc').textContent=state.mapMode==='puntos'?'Cada siniestro es un punto, coloreado por el modo involucrado; los que dejaron fallecidos van resaltados. Haz zoom para explorar.':state.mapMode==='heat'?'Zonas con mayor densidad de siniestros dentro del territorio (mapa de calor).':'Coropleta comunal por '+metricLabel[state.metric]+'. Clic en una comuna para ver su detalle.';
-  if($('#anioTitle').firstChild) $('#anioTitle').childNodes[0].nodeValue='Evolución anual por modo — '+amb;
+  {const at=$('#anioTitle'),tn=[...at.childNodes].find(n=>n.nodeType===3);if(tn)tn.nodeValue='Evolución anual por modo — '+amb;}
 }
 
 /* ---------- Vista PERSONAS accidentadas (fase 2) ---------- */
@@ -630,13 +666,13 @@ function renderPersonas(){
   const totN=ed.n.reduce((a,b)=>a+b,0),totF=ed.f.reduce((a,b)=>a+b,0);
   const iMay=PZ.catEdad.indexOf('Personas mayores'),iNin=PZ.catEdad.indexOf('Niños');
   const kpis=[
-    ['Personas accidentadas',fmt(totN),PZ.anios[0]+'–'+PZ.anios[PZ.anios.length-1]+' · '+amb],
-    ['Fallecidos',fmt(totF),'personas'],
-    ['Niños accidentados',fmt(iNin>=0?ed.n[iNin]:0),(iNin>=0?fmt1(100*ed.f[iNin]/Math.max(1,ed.n[iNin])):'–')+'% letalidad'],
-    ['Personas mayores',fmt(iMay>=0?ed.n[iMay]:0),(iMay>=0?fmt1(100*ed.n[iMay]/Math.max(1,totN)):'–')+'% de accidentados'],
-    ['Fallecidos personas mayores',fmt(iMay>=0?ed.f[iMay]:0),(iMay>=0?fmt1(100*ed.f[iMay]/Math.max(1,totF)):'–')+'% de fallecidos'],
+    ['Personas accidentadas',fmt(totN),PZ.anios[0]+'–'+PZ.anios[PZ.anios.length-1]+' · '+amb,'i-users'],
+    ['Fallecidos',fmt(totF),'personas','i-pulse'],
+    ['Niños accidentados',fmt(iNin>=0?ed.n[iNin]:0),(iNin>=0?fmt1(100*ed.f[iNin]/Math.max(1,ed.n[iNin])):'–')+'% letalidad','i-user'],
+    ['Personas mayores',fmt(iMay>=0?ed.n[iMay]:0),(iMay>=0?fmt1(100*ed.n[iMay]/Math.max(1,totN)):'–')+'% de accidentados','i-user'],
+    ['Fallecidos personas mayores',fmt(iMay>=0?ed.f[iMay]:0),(iMay>=0?fmt1(100*ed.f[iMay]/Math.max(1,totF)):'–')+'% de fallecidos','i-pulse'],
   ];
-  $('#pkpis').innerHTML=kpis.map(k=>`<div class="kpi"><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
+  $('#pkpis').innerHTML=kpis.map(k=>`<div class="kpi"><span class="kic"><svg class="ic"><use href="#${k[3]||'i-users'}"/></svg></span><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
   // grupo etario (n + línea fallecidos)
   mkP('cPersEdad',{type:'bar',data:{labels:PZ.catEdad,datasets:[
     {label:'Accidentados',data:ed.n,backgroundColor:PZ.catEdad.map((c,i)=>c==='Personas mayores'?dgr:acc),borderRadius:4,yAxisID:'y'},
@@ -829,12 +865,6 @@ $('#espReset').onclick=()=>renderEspacial(false);
 
 /* ---------- Init ---------- */
 const totalS=D.factGeo.reduce((a,r)=>a+r[4],0);
-$('#lead').textContent=`${fmt(totalS)} siniestros de tránsito georreferenciados en Chile entre ${M.anios[0]} y ${M.anios[M.anios.length-1]} (urbano y rural). Explora por región, comuna, modo involucrado, causa y momento; el mapa muestra dónde se concentran.`;
-$('#method').innerHTML=`<b>Fuente:</b> ${M.fuente}. <b>Cartografía:</b> DPA Censal 2017 (Esri Chile), 345 comunas / 16 regiones. `+
-  `<b>Alcance:</b> ${M.nota} `+
-  `<b>Modo involucrado:</b> el peatón se identifica por el flag de atropello; motocicleta y bicicleta por su participación en el siniestro. Bus, camión y otros vehículos no vienen marcados por separado en esta base y se agrupan como "vehículo". `+
-  `<b>Tasas:</b> por 100 mil habitantes con población del Censo 2017. Los gráficos de tipo, causa, mes, hora y día responden a los filtros de año, región y modo (no a comuna ni zona). `+
-  `<b>Personas accidentadas (pestaña):</b> base a nivel de persona/participante de CONASET (770 mil personas, 2020–2024), con edad, grupo etario, sexo, rol (conductor/pasajero/peatón) y tipo de usuario/vehículo (incluye bus, camión, etc.); un siniestro involucra a varias personas, así que ahí se cuentan personas, no siniestros. Datos referenciales.`;
 $('#foot').textContent=`Actualizado ${M.generado} · Rodrigo Medina González`;
 
 const themeBtn=$('#themeBtn');
