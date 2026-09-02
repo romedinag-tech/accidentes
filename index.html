@@ -114,7 +114,9 @@ select{background:var(--surface-alt);border:1px solid var(--line);color:var(--in
 .card h3{font-size:1.02rem;margin:16px 0 3px}
 .card .hint,.chint{font-family:var(--font-ui);font-weight:400;font-size:.72rem;color:var(--ink-lo);letter-spacing:0}
 .card p.desc{color:var(--ink-mid);font-size:.82rem;margin:.15rem 0 .7rem;max-width:70ch}
-#map{height:520px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+#map{height:520px;border-radius:10px;overflow:hidden;border:1px solid var(--line);position:relative}
+#mapScope{position:absolute;top:10px;left:10px;z-index:500;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 12px;box-shadow:var(--sh);font-size:.78rem;pointer-events:none;color:var(--ink)}
+#mapScope b{font-size:.9rem}
 .maprow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .seg{display:flex;background:var(--surface-alt);border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .seg button{background:none;border:none;color:var(--ink-mid);padding:7px 12px;cursor:pointer;font-size:.8rem;font-weight:600;font-family:var(--font-ui)}
@@ -194,8 +196,9 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <div class="maprow">
         <span class="seglab">Vista</span>
         <div class="seg" id="mapMode">
-          <button data-mode="choropleth" class="on">Comunas</button>
+          <button data-mode="puntos" class="on">Puntos</button>
           <button data-mode="heat">Concentración</button>
+          <button data-mode="choropleth">Comunas</button>
         </div>
         <div class="seg" id="mapMetric">
           <button data-m="s" class="on">Siniestros</button>
@@ -209,7 +212,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
           <button data-b="satelite">Satélite</button>
         </div>
       </div>
-      <div id="map"></div>
+      <div id="map"><div id="mapScope"></div></div>
       <div class="legend" id="legend"></div>
       <div class="mapfoot" id="mapFoot"></div>
     </div>
@@ -316,7 +319,7 @@ const regPob=c=>(M.regiones.find(r=>r.cod===c)||{}).poblacion||0;
 const cap=s=>s.charAt(0)+s.slice(1).toLowerCase();
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-const state={anios:new Set(M.anios),region:null,comuna:null,metro:null,modo:null,zona:null,metric:'s',mapMode:'choropleth',base:'calles',cb:false};
+const state={anios:new Set(M.anios),region:null,comuna:null,metro:null,modo:null,zona:null,metric:'s',mapMode:'puntos',base:'calles',cb:false};
 const comunasByCod={}; D.comunas.forEach((c,i)=>{(comunasByCod[c.cod]=comunasByCod[c.cod]||[]).push(i);});
 const comIdxByCut={}; D.comunas.forEach((c,i)=>comIdxByCut[c.cut]=i);
 const METROS=M.metros||[]; const metroSets=METROS.map(m=>new Set(m.coms));
@@ -343,6 +346,7 @@ let PAL_T=PAL_T_NORM;
 const PAL_M_NORM=['#B2182B','#E08214','#2E8B57','#4A80C0']; // Peatón, Moto, Bici, Vehículo
 const PAL_M_CB  =['#D55E00','#E69F00','#009E73','#0072B2'];
 let PAL_M=PAL_M_NORM;
+const MODO_RGB=[[178,24,43],[224,130,20],[46,139,87],[74,128,192]]; // peatón, moto, bici, vehículo
 const HEAT_GRAD={0.15:'#2b1a54',0.35:'#8c2981',0.6:'#de4968',0.8:'#fb8861',1.0:'#fcfdbf'}; // magma (secuencial, CB-safe)
 
 /* ---------- Filtros ---------- */
@@ -364,10 +368,10 @@ function fillComunas(){const list=state.region!=null?(comunasByCod[state.region]
   fComuna.value=state.comuna!=null?state.comuna:state.metro!=null?('m'+state.metro):'';}
 fComuna.onchange=()=>{const v=fComuna.value;if(v==='')selectComuna(null);else if(v[0]==='m')selectMetro(+v.slice(1));else selectComuna(+v);};
 function selectMetro(idx){state.metro=idx;state.comuna=null;state.region=METROS[idx].cod;fRegion.value=state.region;
-  if(currentView==='siniestros')state.mapMode='choropleth';fillComunas();fComuna.value='m'+idx;syncModeBtns();render();}
+  fillComunas();fComuna.value='m'+idx;syncModeBtns();render();}
 function selectComuna(ci){state.comuna=ci;state.metro=null;
-  if(ci!=null){state.region=D.comunas[ci].cod;fRegion.value=state.region;fillComunas();fComuna.value=ci;if(currentView==='siniestros')state.mapMode='heat';}
-  else{if(currentView==='siniestros')state.mapMode='choropleth';fComuna.value='';}
+  if(ci!=null){state.region=D.comunas[ci].cod;fRegion.value=state.region;fillComunas();fComuna.value=ci;}
+  else{fComuna.value='';}
   syncModeBtns();render();}
 function syncModeBtns(){$('#mapMode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.mode===state.mapMode));}
 const fModo=$('#fModo');fModo.innerHTML='<option value="">Todos los modos</option>'+
@@ -484,7 +488,28 @@ function renderTop(A){
 }
 
 /* ---------- Mapa ---------- */
-let map,comunaLayer,regionLayer,heatLayer,curAgg,lastRegion=null,lastComuna=null,lastMetro=null;
+let map,comunaLayer,regionLayer,heatLayer,curAgg,lastRegion=null,lastComuna=null,lastMetro=null,pointsLayer=null;
+const PointsLayer=L.Layer.extend({
+  onAdd(map){this._map=map;const c=this._c=L.DomUtil.create('canvas','leaflet-zoom-hide');
+    const s=map.getSize();c.width=s.x;c.height=s.y;c.style.pointerEvents='none';
+    map.getPanes().overlayPane.appendChild(c);
+    map.on('moveend zoomend viewreset resize',this._draw,this);this._draw();return this;},
+  onRemove(map){map.getPanes().overlayPane.removeChild(this._c);map.off('moveend zoomend viewreset resize',this._draw,this);},
+  setData(pts){this._pts=pts;this._draw();return this;},
+  _draw(){if(!this._map)return;const map=this._map,s=map.getSize();
+    L.DomUtil.setPosition(this._c,map.containerPointToLayerPoint([0,0]));
+    if(this._c.width!==s.x||this._c.height!==s.y){this._c.width=s.x;this._c.height=s.y;}
+    const ctx=this._c.getContext('2d');ctx.clearRect(0,0,s.x,s.y);
+    const pts=this._pts||[],b=map.getBounds(),N=b.getNorth(),So=b.getSouth(),W=b.getWest(),E=b.getEast();
+    for(let pass=0;pass<2;pass++){const wantFatal=pass===1;
+      for(const p of pts){const fatal=p[7]>0;if(fatal!==wantFatal)continue;
+        const la=p[0],lo=p[1];if(la<So||la>N||lo<W||lo>E)continue;
+        const pt=map.latLngToContainerPoint([la,lo]),rgb=MODO_RGB[p[4]]||[110,110,120];
+        ctx.beginPath();ctx.arc(pt.x,pt.y,fatal?4.2:2.3,0,6.283);
+        ctx.fillStyle='rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+','+(fatal?0.95:0.5)+')';ctx.fill();
+        if(fatal){ctx.lineWidth=1.4;ctx.strokeStyle='#4a0009';ctx.stroke();}}}
+  }
+});
 let baseStreets,baseSat,baseLabels;
 function initMap(){
   map=L.map('map',{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([-38,-71.5],4);
@@ -522,8 +547,7 @@ function tipText(cut){const i=comIdxByCut[cut],com=D.comunas[i],v=curAgg&&curAgg
     (v?`<br>Siniestros: <b>${fmt(v.s)}</b> · Fallecidos: <b>${fmt(v.m)}</b><br>Tasa: <b>${fmt1(t)}</b>/100k`:'<br><i>sin datos en el filtro</i>');}
 function buildHeat(){const useM=state.metric==='m';const agg=new Map();let maxw=0;
   for(const [la,lo,ci,mo,s,m] of D.gridHot){
-    if(!modoOk(mo))continue;
-    if(state.comuna!=null){if(ci!==state.comuna)continue;}else if(state.region!=null){if(D.comunas[ci].cod!==state.region)continue;}
+    if(!modoOk(mo)||!inScope(ci))continue;
     const w=useM?m:s;if(w<=0)continue;const k=la+','+lo;agg.set(k,(agg.get(k)||0)+w);}
   const pts=[];for(const [k,w] of agg){const [la,lo]=k.split(',');if(w>maxw)maxw=w;pts.push([+la,+lo,w]);}
   return {pts,maxw};}
@@ -532,8 +556,9 @@ function renderHeat(){if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}
   heatLayer=L.heatLayer(pts,{radius:18,blur:15,maxZoom:16,max:Math.max(1,maxw*0.6),gradient:HEAT_GRAD}).addTo(map);
   $('#mapFoot').textContent=`${fmt(pts.length)} celdas de ~330 m · densidad de ${state.metric==='m'?'fallecidos':'siniestros'}${state.modo!=null?' — '+M.modos[state.modo]:''} · acumulado ${M.anios[0]}–${M.anios[M.anios.length-1]}`;}
 function renderLegend(){
-  const heat=state.mapMode==='heat';
-  if(heat){$('#legend').innerHTML='<span>menos</span>'+['#2b1a54','#8c2981','#de4968','#fb8861','#fcfdbf'].map(c=>`<i style="background:${c}"></i>`).join('')+'<span>más</span><span style="margin-left:6px">· densidad de '+(state.metric==='m'?'fallecidos':'siniestros')+'</span>';return;}
+  const mode=state.mapMode;
+  if(mode==='puntos'){$('#legend').innerHTML='Cada punto es un siniestro. '+M.modos.map((mo,i)=>`<span style="margin:0 9px 0 2px"><i style="width:11px;height:11px;border-radius:50%;display:inline-block;background:rgb(${MODO_RGB[i].join(',')});vertical-align:-1px"></i> ${mo}</span>`).join('')+'<span style="margin-left:4px">· <b style="border:1.4px solid #4a0009;border-radius:50%;padding:0 3px">◍</b> con fallecidos</span>';return;}
+  if(mode==='heat'){$('#legend').innerHTML='<span>menos</span>'+['#2b1a54','#8c2981','#de4968','#fb8861','#fcfdbf'].map(c=>`<i style="background:${c}"></i>`).join('')+'<span>más</span><span style="margin-left:6px">· densidad de '+(state.metric==='m'?'fallecidos':'siniestros')+'</span>';return;}
   // coropleta: quiebres (cuantiles)
   let h='<span class="tk">0</span>';
   for(let i=0;i<PAL.length;i++){h+=`<i style="background:${PAL[i]}"></i><span class="tk">${i<breaks.length?(state.metric==='tasa'?fmt1(breaks[i]):fmt(breaks[i])):''}</span>`;}
@@ -541,8 +566,18 @@ function renderLegend(){
   $('#legend').innerHTML=h;
 }
 function renderMap(A){curAgg=A;computeBreaks(A);
-  const heat=state.mapMode==='heat';
-  if(heat){comunaLayer.setStyle({fillOpacity:0,weight:.3,color:'#8a93a5'});renderHeat();}
+  const mode=state.mapMode;
+  $('#mapScope').innerHTML=`<b style="font-family:var(--font-display)">${scopeName()}</b> · <span class="num">${fmt(A.T.s)}</span> siniestros · <span class="num" style="color:var(--red)">${fmt(A.T.m)}</span> fallecidos · ${M.anios[0]}–${M.anios[M.anios.length-1]}`;
+  if(pointsLayer){map.removeLayer(pointsLayer);pointsLayer=null;}
+  if(mode==='heat'){comunaLayer.setStyle({fillOpacity:0,weight:.3,color:'#8a93a5'});renderHeat();}
+  else if(mode==='puntos'){
+    if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}
+    comunaLayer.setStyle({fillOpacity:0,weight:.6,color:css('--ink-lo')});
+    const scoped=state.region!=null||state.comuna!=null||state.metro!=null;
+    if(!scoped){$('#mapFoot').textContent='A nivel país son demasiados puntos. Elige una región o ciudad (arriba) para ver los siniestros uno a uno.';}
+    else{const pts=espFiltered();pointsLayer=new PointsLayer().addTo(map);pointsLayer.setData(pts);
+      $('#mapFoot').textContent=`${fmt(pts.length)} siniestros individuales · color por modo involucrado · los que dejaron fallecidos van resaltados con borde`;}
+  }
   else{if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}comunaLayer.setStyle(featStyle);$('#mapFoot').textContent='';}
   renderLegend();
   if(state.comuna!==lastComuna||state.region!==lastRegion||state.metro!==lastMetro){lastComuna=state.comuna;lastRegion=state.region;lastMetro=state.metro;
@@ -568,7 +603,7 @@ function render(){
   const A=aggGeo();renderKpis(A);renderCharts(A);renderTop(A);renderMap(A);renderBreadcrumb();
   const amb=scopeName();
   $('#mapHint').textContent='· '+amb;
-  $('#mapDesc').textContent=state.mapMode==='heat'?'Zonas con mayor densidad de siniestros dentro de la ciudad (mapa de calor).':'Color por '+metricLabel[state.metric]+'. Clic en una comuna para ver su detalle.';
+  $('#mapDesc').textContent=state.mapMode==='puntos'?'Cada siniestro es un punto, coloreado por el modo involucrado; los que dejaron fallecidos van resaltados. Haz zoom para explorar.':state.mapMode==='heat'?'Zonas con mayor densidad de siniestros dentro del territorio (mapa de calor).':'Coropleta comunal por '+metricLabel[state.metric]+'. Clic en una comuna para ver su detalle.';
   if($('#anioTitle').firstChild) $('#anioTitle').childNodes[0].nodeValue='Evolución anual por modo — '+amb;
 }
 
@@ -641,7 +676,6 @@ let deckgl=null, espView={longitude:-71.3,latitude:-37,zoom:3.7,pitch:0,bearing:
 let superIdx=null, superKey='', lastHexRes=-1;
 const ESP={mode:'hex',metric:'s'};
 const RAMP=[[255,255,204],[255,237,160],[254,217,118],[254,178,76],[253,141,60],[252,78,42],[227,26,28],[177,0,38]];
-const MODO_RGB=[[178,24,43],[224,130,20],[46,139,87],[74,128,192]]; // peatón, moto, bici, vehículo
 function rampCol(t){t=Math.max(0,Math.min(0.999,t||0));return RAMP[Math.floor(t*RAMP.length)];}
 const maxOf=(arr,f)=>{let m=1;for(const x of arr){const v=f(x);if(v>m)m=v;}return m;};
 const wOf=p=>ESP.metric==='f'?p[7]:1;
