@@ -263,7 +263,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <div class="card"><h2>Fallecidos por tipo de usuario</h2><p class="desc">Mortalidad absoluta por modo — peatones y motociclistas pesan mucho más en fallecidos que en accidentados.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuarioF"></canvas></div></div>
     </div>
     <div class="charts2">
-      <div class="card"><h2>Por rol en el siniestro</h2><div class="chartbox sm"><canvas id="cPersRol"></canvas></div></div>
+      <div class="card"><h2>¿Cómo participaba la persona? <span class="hint">conductor · pasajero · peatón</span></h2><p class="desc">Posición de la persona en el siniestro: si iba conduciendo, como pasajero, o a pie (peatón). No indica responsabilidad.</p><div class="chartbox sm"><canvas id="cPersRol"></canvas></div></div>
       <div class="card"><h2>Fallecidos por grupo etario</h2><div class="chartbox sm"><canvas id="cPersEdadF"></canvas></div></div>
     </div>
   </div>
@@ -286,7 +286,14 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <p class="desc" id="espDesc" style="margin:10px 0 0;max-width:80ch"></p>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
-      <div id="deckMap" style="height:620px;position:relative;background:var(--surface-alt);cursor:grab"></div>
+      <div id="deckMap" style="height:620px;position:relative;background:var(--surface-alt);cursor:grab">
+        <div id="deckPrompt" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:6;background:rgba(10,13,19,.28);padding:20px">
+          <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 22px;box-shadow:var(--sh);max-width:440px;text-align:center">
+            <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:6px">Elige una región o ciudad</div>
+            <div style="color:var(--ink-mid);font-size:.86rem">Esta modalidad muestra el detalle <b>punto a punto</b>. Para que cargue al instante, primero selecciona una <b>región</b> (o comuna) en los filtros de arriba; así solo se procesan sus siniestros y no los de todo Chile.</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="legend" id="espLegend" style="margin-top:10px"></div>
     <div class="mapfoot" id="espFoot" style="margin-top:6px"></div>
@@ -298,7 +305,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </footer>
 </div>
 
-<script src="data_bundle.js?v=5"></script>
+<script src="data_bundle.js?v=6"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const $=s=>document.querySelector(s);
@@ -338,8 +345,8 @@ function fillComunas(){const list=state.region!=null?(comunasByCod[state.region]
   fComuna.value=state.comuna!=null?state.comuna:'';}
 fComuna.onchange=()=>selectComuna(fComuna.value!==''?+fComuna.value:null);
 function selectComuna(ci){state.comuna=ci;
-  if(ci!=null){state.region=D.comunas[ci].cod;fRegion.value=state.region;fillComunas();fComuna.value=ci;state.mapMode='heat';}
-  else{state.mapMode='choropleth';fComuna.value='';}
+  if(ci!=null){state.region=D.comunas[ci].cod;fRegion.value=state.region;fillComunas();fComuna.value=ci;if(currentView==='siniestros')state.mapMode='heat';}
+  else{if(currentView==='siniestros')state.mapMode='choropleth';fComuna.value='';}
   syncModeBtns();render();}
 function syncModeBtns(){$('#mapMode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.mode===state.mapMode));}
 const fModo=$('#fModo');fModo.innerHTML='<option value="">Todos los modos</option>'+
@@ -549,17 +556,18 @@ function render(){
 /* ---------- Vista PERSONAS accidentadas (fase 2) ---------- */
 const PZ=D.personas;
 const PAL_EDAD=['#6BAED6','#4292C6','#2171B5','#B2182B','#B0B7C3']; // niños..jóvenes..mayores(rojo)..no informa
+const persComOk=ci=>state.comuna!=null?ci===state.comuna:(state.region==null||D.comunas[ci].cod===state.region);
 function aggPers(fact,size){const n=new Array(size).fill(0),f=new Array(size).fill(0);
-  for(const [cod,an,zo,idx,nv,fv] of fact){if(!anioOk(an)||!zonaOk(zo))continue;if(state.region!=null&&cod!==state.region)continue;n[idx]+=nv;f[idx]+=fv;}
+  for(const [ci,an,idx,nv,fv] of fact){if(!anioOk(an)||!persComOk(ci))continue;n[idx]+=nv;f[idx]+=fv;}
   return {n,f};}
 function aggPiramide(){const R=PZ.rangos.length,S=PZ.sexos.length;const m=Array.from({length:R},()=>new Array(S).fill(0));
-  for(const [cod,an,zo,ra,sx,n] of PZ.piramide){if(!anioOk(an)||!zonaOk(zo))continue;if(state.region!=null&&cod!==state.region)continue;m[ra][sx]+=n;}
+  for(const [ci,an,ra,sx,n] of PZ.piramide){if(!anioOk(an)||!persComOk(ci))continue;m[ra][sx]+=n;}
   return m;}
 function renderPersonas(){
   if(!PZ){$('#viewPersonas').innerHTML='<div class="card">Datos de personas no disponibles.</div>';return;}
   const tick=css('--ink-lo'),grid=css('--line'),dgr=css('--red'),acc=css('--accent'),teal=css('--teal');
-  const amb=state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
-  $('#persLead').textContent=`Análisis a nivel de persona (accidentados) — ${amb}, ${PZ.anios[0]}–${PZ.anios[PZ.anios.length-1]}. Un siniestro involucra a varias personas; aquí se cuentan las personas, no los siniestros. Responde a los filtros de año, región y zona.`;
+  const amb=state.comuna!=null?D.comunas[state.comuna].nombre:state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
+  $('#persLead').textContent=`Análisis a nivel de persona (accidentados) — ${amb}, ${PZ.anios[0]}–${PZ.anios[PZ.anios.length-1]}. Un siniestro involucra a varias personas; aquí se cuentan las personas, no los siniestros. Responde a los filtros de año, región y comuna.`;
   const ed=aggPers(PZ.edad,PZ.catEdad.length);
   const totN=ed.n.reduce((a,b)=>a+b,0),totF=ed.f.reduce((a,b)=>a+b,0);
   const iMay=PZ.catEdad.indexOf('Personas mayores'),iNin=PZ.catEdad.indexOf('Niños');
@@ -605,7 +613,7 @@ $('#mainTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   $('#mainTabs').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
   currentView=b.dataset.v;const sin=currentView==='siniestros',pers=currentView==='personas',esp=currentView==='espacial';
   $('#viewSiniestros').hidden=!sin;$('#viewPersonas').hidden=!pers;$('#viewEspacial').hidden=!esp;
-  $('#fgComuna').style.display=sin?'':'none';$('#fgModo').style.display=pers?'none':'';$('#breadcrumb').style.display=sin?'':'none';
+  $('#fgComuna').style.display='';$('#fgModo').style.display=pers?'none':'';$('#breadcrumb').style.display=sin?'':'none';
   if(esp){renderEspacial(false);setTimeout(fitDeck,140);}else{render();if(sin&&map)setTimeout(()=>{map.invalidateSize();renderMap(curAgg);},60);}
 });
 
@@ -619,7 +627,9 @@ function rampCol(t){t=Math.max(0,Math.min(0.999,t||0));return RAMP[Math.floor(t*
 const maxOf=(arr,f)=>{let m=1;for(const x of arr){const v=f(x);if(v>m)m=v;}return m;};
 const wOf=p=>ESP.metric==='f'?p[7]:1;
 function espFiltered(){const out=[],y0=M.anios[0];
-  for(const p of D.puntos){if(!anioOk(p[2]+y0)||!zonaOk(p[6])||!modoOk(p[4]))continue;if(state.region!=null&&p[3]!==state.region)continue;out.push(p);}
+  for(const p of D.puntos){if(!anioOk(p[2]+y0)||!zonaOk(p[6])||!modoOk(p[4]))continue;
+    if(state.comuna!=null){if(p[8]!==state.comuna)continue;}else if(state.region!=null&&p[3]!==state.region)continue;
+    out.push(p);}
   return out;}
 function h3res(z){return z<5?4:z<6.5?5:z<8?6:z<10?7:z<12?8:9;}
 function basemapLayer(){return new deck.TileLayer({id:'osm',data:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -711,9 +721,28 @@ function initDeck(){if(deckgl)return;const el=document.getElementById('deckMap')
       if(ESP.mode==='cluster'||ESP.mode==='contour'||(ESP.mode==='hex'&&h3res(viewState.zoom)!==lastHexRes))scheduleEsp();},
     layers:[]});}
 let espTimer=null;
-function scheduleEsp(){clearTimeout(espTimer);espTimer=setTimeout(()=>renderEspacial(true),120);}
+function scheduleEsp(){clearTimeout(espTimer);espTimer=setTimeout(()=>renderEspacial(true),200);}
+function fitEspView(){let vs=Object.assign({},espView),gj=null;
+  if(state.comuna!=null)gj=D.geoComunas.features.find(f=>comIdxByCut[f.properties.cut_com]===state.comuna);
+  else if(state.region!=null)gj=D.geoRegiones.features.find(f=>f.properties.cod_region===state.region);
+  if(gj){const b=L.geoJSON(gj).getBounds();vs.longitude=(b.getWest()+b.getEast())/2;vs.latitude=(b.getSouth()+b.getNorth())/2;
+    vs.zoom=Math.min(13,Math.max(6,Math.log2(360/Math.max(0.04,b.getEast()-b.getWest()))+1));}
+  else{vs.longitude=-71.3;vs.latitude=-37;vs.zoom=3.7;}
+  vs.pitch=ESP.mode==='hex'?45:0;vs.bearing=ESP.mode==='hex'?-12:0;espView=vs;deckgl.setProps({viewState:espView});}
+function setEspDesc(){$('#espDesc').textContent=({hex:'Grillas hexagonales H3 con extrusión 3D: la altura codifica la magnitud exacta; arrastra con botón derecho para inclinar la cámara. La resolución se adapta al zoom.',
+  contour:'Isolíneas de densidad (KDE en bandas discretas): anillos que delimitan umbrales de concentración, sin la difuminación del mapa de calor.',
+  red:'Segmentación sobre la red vial real: cada tramo se colorea por sus siniestros o fallecidos, ligando el análisis a la infraestructura.',
+  bivar:'Mapa bivariado de riesgo: cruza exposición (población) con frecuencia de siniestros para revelar dónde el peligro es desproporcionado.',
+  cluster:'Clústeres dinámicos: burbujas con conteo a escala macro que se desagregan en puntos individuales por modo al hacer zoom.'})[ESP.mode];}
+let lastEspScope='__';
 function renderEspacial(keepView){
   if(!deckgl)initDeck();
+  const scopeKey=state.region+'|'+state.comuna,scopeChanged=scopeKey!==lastEspScope;lastEspScope=scopeKey;
+  if(!keepView||scopeChanged)fitEspView();
+  const needScope=['hex','contour','cluster','red'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null;
+  setEspDesc();
+  if(needScope&&!scoped){$('#deckPrompt').style.display='flex';$('#espFoot').textContent='';$('#espLegend').innerHTML='';deckgl.setProps({layers:[basemapLayer()]});return;}
+  $('#deckPrompt').style.display='none';
   const pts=(ESP.mode==='red'||ESP.mode==='bivar')?null:espFiltered();
   let dataLayers;
   if(ESP.mode==='hex')dataLayers=[buildHex(pts)];
@@ -721,20 +750,7 @@ function renderEspacial(keepView){
   else if(ESP.mode==='red')dataLayers=[buildRed()];
   else if(ESP.mode==='bivar')dataLayers=[buildBivar()];
   else dataLayers=buildCluster(pts);
-  const vs=Object.assign({},espView);
-  if(!keepView){ // encuadrar a región/país al cambiar de modo o filtro
-    if(state.region!=null){const gj=D.geoRegiones.features.find(f=>f.properties.cod_region===state.region);
-      if(gj){const b=L.geoJSON(gj).getBounds();vs.longitude=(b.getWest()+b.getEast())/2;vs.latitude=(b.getSouth()+b.getNorth())/2;
-        vs.zoom=Math.min(11,Math.max(6,Math.log2(360/(b.getEast()-b.getWest()))+1));}}
-    else{vs.longitude=-71.3;vs.latitude=-37;vs.zoom=3.7;}
-    vs.pitch=ESP.mode==='hex'?45:0;vs.bearing=ESP.mode==='hex'?-15:0;espView=vs;
-  }
   deckgl.setProps({viewState:espView,layers:[basemapLayer(),...dataLayers]});
-  $('#espDesc').textContent=({hex:'Grillas hexagonales H3 con extrusión 3D: la altura codifica la magnitud exacta sin saturar la vista; arrastra con botón derecho para inclinar la cámara. La resolución del hexágono se adapta al zoom.',
-    contour:'Isolíneas de densidad (KDE en bandas discretas): anillos que delimitan umbrales de concentración, evitando la difuminación del mapa de calor tradicional.',
-    red:'Segmentación sobre la red vial real: cada tramo se colorea por la cantidad de siniestros (o fallecidos) que ocurrieron sobre él, ligando el análisis a la infraestructura.',
-    bivar:'Mapa bivariado de riesgo: cruza exposición (población) con frecuencia de siniestros para revelar dónde el peligro es desproporcionado, no solo dónde hay más tráfico.',
-    cluster:'Clústeres dinámicos: burbujas con conteo a escala macro que se desagregan en puntos individuales por modo al hacer zoom.'})[ESP.mode];
 }
 $('#espMode').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#espMode').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');ESP.mode=b.dataset.e;superKey='';renderEspacial(false);});
 $('#espMetric').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#espMetric').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');ESP.metric=b.dataset.m;superKey='';renderEspacial(true);});

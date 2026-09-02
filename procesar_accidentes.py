@@ -9,6 +9,7 @@ y causa agrupada. Ver scripts/descargar_base_2025.py y scripts/convertir_base_20
 """
 import os, json, datetime, warnings
 import duckdb, geopandas as gpd, pandas as pd
+import topojson as tp
 warnings.filterwarnings('ignore')
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -87,23 +88,27 @@ def round_coords(o, nd=3):
     if isinstance(o, list):
         return [round(x, nd) for x in o] if o and isinstance(o[0], (int, float)) else [round_coords(x, nd) for x in o]
     return o
-def geojson(path, cols, tol):
+def topo_geojson(path, cols, tol, nd=4):
+    """Simplifica preservando bordes compartidos (topología) -> polígonos que calzan, sin huecos."""
     g = gpd.read_parquet(path)[cols + ['geometry']].copy()
-    g['geometry'] = g.geometry.buffer(0).simplify(tol, preserve_topology=True)
-    gj = json.loads(g.to_json())
+    g['geometry'] = g.geometry.buffer(0)
+    topo = tp.Topology(g, prequantize=True, toposimplify=tol)
+    gj = json.loads(topo.to_geojson())
     for f in gj['features']:
-        f.pop('id', None); f['geometry']['coordinates'] = round_coords(f['geometry']['coordinates'])
+        f.pop('id', None)
+        f['geometry']['coordinates'] = round_coords(f['geometry']['coordinates'], nd)
     return gj
-GJ_COMUNAS = geojson(f'{P}/cartografia/comunas.parquet', ['cut_com'], 0.02)
-GJ_REGIONES = geojson(f'{P}/cartografia/regiones.parquet', ['cod_region'], 0.03)
+GJ_COMUNAS = topo_geojson(f'{P}/cartografia/comunas.parquet', ['cut_com'], 0.005)
+GJ_REGIONES = topo_geojson(f'{P}/cartografia/regiones.parquet', ['cod_region'], 0.01)
 
 # ---------- Puntos individuales (para hexágonos 3D, contornos KDE y clústeres) ----------
 # Compacto: [lat, lon, año-offset, cod_region, modoIdx, tipoIdx, zona, fallecidos]
 pts = q(f"""SELECT round(lat,4) la, round(lon,4) lo, anio, cod_region, modo, coalesce(tipo,'SIN DATO') tipo,
-                   {ZONA} zona, least(coalesce(fallecidos,0),9) f
+                   {ZONA} zona, least(coalesce(fallecidos,0),9) f, cut_com
             FROM {SRC} WHERE {WHERE} AND lat IS NOT NULL AND lon IS NOT NULL
               AND lat BETWEEN -56 AND -17 AND lon BETWEEN -110 AND -66""")
-PUNTOS = [[r.la, r.lo, int(r.anio) - ANIO_MIN, int(r.cod_region), modo_idx[r.modo], tipo_idx.get(r.tipo, 0), int(r.zona), int(r.f)]
+PUNTOS = [[r.la, r.lo, int(r.anio) - ANIO_MIN, int(r.cod_region), modo_idx[r.modo], tipo_idx.get(r.tipo, 0),
+           int(r.zona), int(r.f), com_idx.get(r.cut_com, -1)]
           for r in pts.itertuples() if r.modo in modo_idx]
 
 # ---------- Red vial segmentada (linear referencing, precómputo offline) ----------
@@ -140,18 +145,19 @@ if os.path.exists(ppath):
     PANIOS = [int(x) for x in q(f"SELECT DISTINCT anio FROM {PP} WHERE anio IS NOT NULL ORDER BY anio").anio]
     ce_idx = {c: i for i, c in enumerate(CAT_EDAD)}; us_idx = {c: i for i, c in enumerate(USUARIOS)}
     ro_idx = {c: i for i, c in enumerate(ROLES)}; sx_idx = {c: i for i, c in enumerate(SEXOS)}; ra_idx = {c: i for i, c in enumerate(RANGOS)}
+    PWC = PW + " AND cut_com IS NOT NULL"   # claveado por comuna (permite filtrar por ciudad); región = comuna.cod
     def pmet(dc):
-        return q(f"SELECT cod_region, anio, {ZONA} zona, {dc} d, count(*) n, sum(fallecidos) f FROM {PP} WHERE {PW} AND {dc} IS NOT NULL GROUP BY cod_region, anio, {ZONA}, {dc}")
+        return q(f"SELECT cut_com, anio, {dc} d, count(*) n, sum(fallecidos) f FROM {PP} WHERE {PWC} AND {dc} IS NOT NULL GROUP BY cut_com, anio, {dc}")
     def pack(df, idx):
-        return [[int(r.cod_region), int(r.anio), int(r.zona), idx[r.d], int(r.n), int(r.f or 0)] for r in df.itertuples() if r.d in idx]
-    PERS_EDAD = pack(pmet('cat_edad'), ce_idx)
+        return [[com_idx[r.cut_com], int(r.anio), idx[r.d], int(r.n), int(r.f or 0)] for r in df.itertuples() if r.cut_com in com_idx and r.d in idx]
+    PERS_EDAD = pack(pmet('cat_edad'), ce_idx)          # [comIdx, anio, catEdadIdx, n, f]
     PERS_USUARIO = pack(pmet('usuario'), us_idx)
     PERS_ROL = pack(pmet('rol'), ro_idx)
-    pir = q(f"SELECT cod_region, anio, {ZONA} zona, rango_etareo ra, sexo sx, count(*) n FROM {PP} WHERE {PW} AND rango_etareo IS NOT NULL AND sexo IS NOT NULL GROUP BY cod_region, anio, {ZONA}, rango_etareo, sexo")
-    PERS_PIR = [[int(r.cod_region), int(r.anio), int(r.zona), ra_idx[r.ra], sx_idx[r.sx], int(r.n)] for r in pir.itertuples() if r.ra in ra_idx and r.sx in sx_idx]
+    pir = q(f"SELECT cut_com, anio, rango_etareo ra, sexo sx, count(*) n FROM {PP} WHERE {PWC} AND rango_etareo IS NOT NULL AND sexo IS NOT NULL GROUP BY cut_com, anio, rango_etareo, sexo")
+    PERS_PIR = [[com_idx[r.cut_com], int(r.anio), ra_idx[r.ra], sx_idx[r.sx], int(r.n)] for r in pir.itertuples() if r.cut_com in com_idx and r.ra in ra_idx and r.sx in sx_idx]
     PERS = {'anios': PANIOS, 'catEdad': CAT_EDAD, 'usuarios': USUARIOS, 'roles': ROLES, 'sexos': SEXOS, 'rangos': RANGOS,
             'edad': PERS_EDAD, 'usuario': PERS_USUARIO, 'rol': PERS_ROL, 'piramide': PERS_PIR}
-    print(f'  PERSONAS: edad={len(PERS_EDAD)} usuario={len(PERS_USUARIO)} rol={len(PERS_ROL)} piramide={len(PERS_PIR)} · años {PANIOS[0]}-{PANIOS[-1]}')
+    print(f'  PERSONAS(comuna): edad={len(PERS_EDAD)} usuario={len(PERS_USUARIO)} rol={len(PERS_ROL)} piramide={len(PERS_PIR)} · años {PANIOS[0]}-{PANIOS[-1]}')
 
 DATA = {
     'meta': {

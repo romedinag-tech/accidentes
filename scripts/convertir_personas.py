@@ -8,7 +8,7 @@ import os, sys, warnings
 import pandas as pd, numpy as np
 warnings.filterwarnings('ignore')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from convertir_parquet import norm_region, norm_zona, repair, COD2NOMBRE
+from convertir_parquet import norm_region, norm_zona, repair, COD2NOMBRE, get_comuna_lookup, comuna_key
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(BASE, 'data', 'CONASET_2020_2025', 'personas_cruda.parquet')
@@ -24,6 +24,9 @@ def main():
     out['cod_region'] = reg.map(lambda v: mp.get(v, (None, None))[0]).astype('Int64')
     out['region_norm'] = reg.map(lambda v: mp.get(v, (None, None))[1])
     out['comuna'] = df['Comuna'].map(repair)
+    lu = get_comuna_lookup()
+    out['cut_com'] = [lu.get((int(cod), comuna_key(nom))) if pd.notna(cod) and isinstance(nom, str) else None
+                      for cod, nom in zip(out['cod_region'], out['comuna'])]
     out['zona'] = df['Zona'].map(norm_zona)
     out['cat_edad'] = df['Categoria_edad'].map(repair)
     out['rango_etareo'] = df['Rango_etareo'].map(repair)
@@ -43,6 +46,7 @@ def main():
     print('cat_edad:', out['cat_edad'].value_counts().to_dict())
     print('usuarios:', out['usuario'].value_counts().head(6).to_dict())
     print('region_norm no-nulo: %.1f%%' % (out['region_norm'].notna().mean() * 100))
+    print('cut_com no-nulo: %.1f%%' % (out['cut_com'].notna().mean() * 100))
 
 if __name__ == '__main__':
     main()
