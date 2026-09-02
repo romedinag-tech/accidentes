@@ -101,6 +101,22 @@ def topo_geojson(path, cols, tol, nd=4):
 GJ_COMUNAS = topo_geojson(f'{P}/cartografia/comunas.parquet', ['cut_com'], 0.005)
 GJ_REGIONES = topo_geojson(f'{P}/cartografia/regiones.parquet', ['cod_region'], 0.01)
 
+# ---------- Áreas metropolitanas / conurbaciones (varias comunas a la vez) ----------
+import collections as _col
+mt = q(f"""SELECT area_metro am, cut_com, count(*) n FROM {SRC}
+           WHERE {WHERE} AND area_metro IS NOT NULL AND cut_com IS NOT NULL
+           GROUP BY area_metro, cut_com""")
+_metros = {}
+for r in mt.itertuples():
+    if r.cut_com in com_idx:
+        _metros.setdefault(r.am, []).append(com_idx[r.cut_com])
+METROS = []
+for nombre in sorted(_metros):
+    coms = sorted(set(_metros[nombre]))
+    cod = _col.Counter(COMUNAS[ci]['cod'] for ci in coms).most_common(1)[0][0]
+    METROS.append({'nombre': nombre, 'coms': coms, 'cod': int(cod)})
+print('  áreas metropolitanas:', [m['nombre'] for m in METROS])
+
 # ---------- Puntos individuales (para hexágonos 3D, contornos KDE y clústeres) ----------
 # Compacto: [lat, lon, año-offset, cod_region, modoIdx, tipoIdx, zona, fallecidos]
 pts = q(f"""SELECT round(lat,4) la, round(lon,4) lo, anio, cod_region, modo, coalesce(tipo,'SIN DATO') tipo,
@@ -167,7 +183,7 @@ DATA = {
                  'El "modo involucrado" marca si en el siniestro participó un peatón (atropello), una motocicleta o '
                  'una bicicleta; el resto se clasifica como vehículo. Un siniestro se asigna a un solo modo por '
                  'prioridad (peatón > moto > bici > vehículo). Datos referenciales.'),
-        'regiones': REGIONES, 'tipos': TIPOS, 'causas': CAUSAS, 'modos': MODOS,
+        'regiones': REGIONES, 'tipos': TIPOS, 'causas': CAUSAS, 'modos': MODOS, 'metros': METROS,
         'zonas': ['Urbana', 'Rural', 'Sin dato'],
         'dias': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
     },

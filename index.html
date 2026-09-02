@@ -305,7 +305,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </footer>
 </div>
 
-<script src="data_bundle.js?v=6"></script>
+<script src="data_bundle.js?v=7"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const $=s=>document.querySelector(s);
@@ -316,9 +316,24 @@ const regPob=c=>(M.regiones.find(r=>r.cod===c)||{}).poblacion||0;
 const cap=s=>s.charAt(0)+s.slice(1).toLowerCase();
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-const state={anios:new Set(M.anios),region:null,comuna:null,modo:null,zona:null,metric:'s',mapMode:'choropleth',base:'calles',cb:false};
+const state={anios:new Set(M.anios),region:null,comuna:null,metro:null,modo:null,zona:null,metric:'s',mapMode:'choropleth',base:'calles',cb:false};
 const comunasByCod={}; D.comunas.forEach((c,i)=>{(comunasByCod[c.cod]=comunasByCod[c.cod]||[]).push(i);});
 const comIdxByCut={}; D.comunas.forEach((c,i)=>comIdxByCut[c.cut]=i);
+const METROS=M.metros||[]; const metroSets=METROS.map(m=>new Set(m.coms));
+const featByCom={}; D.geoComunas.features.forEach(f=>{const ci=comIdxByCut[f.properties.cut_com];if(ci!=null)featByCom[ci]=f;});
+function comsBounds(coms){let b=null;for(const ci of coms){const f=featByCom[ci];if(f){const fb=L.geoJSON(f).getBounds();b=b?b.extend(fb):fb;}}return b;}
+function scopeBounds(){ if(state.comuna!=null){const f=featByCom[state.comuna];return f?L.geoJSON(f).getBounds():null;}
+  if(state.metro!=null)return comsBounds(METROS[state.metro].coms);
+  if(state.region!=null){const gj=D.geoRegiones.features.find(f=>f.properties.cod_region===state.region);return gj?L.geoJSON(gj).getBounds():null;} return null; }
+function inScope(ci){ if(state.comuna!=null)return ci===state.comuna;
+  if(state.metro!=null)return metroSets[state.metro].has(ci);
+  if(state.region!=null)return D.comunas[ci].cod===state.region; return true; }
+function scopeName(){ return state.comuna!=null?D.comunas[state.comuna].nombre
+  : state.metro!=null?METROS[state.metro].nombre
+  : state.region!=null?regName(state.region).replace('Región ',''):'todo Chile'; }
+function scopePob(){ return state.comuna!=null?D.comunas[state.comuna].pob
+  : state.metro!=null?METROS[state.metro].coms.reduce((a,ci)=>a+D.comunas[ci].pob,0)
+  : state.region!=null?regPob(state.region):M.regiones.reduce((a,r)=>a+r.poblacion,0); }
 
 /* Paletas de dato (neutrales, no cambian con el tema) */
 const PAL=['#eff3fb','#c6d9f0','#9ec0e3','#6ba3d6','#4a80c0','#2f66ad','#1c4d8f','#16365a']; // secuencial azul (magnitud)
@@ -337,14 +352,20 @@ M.anios.forEach(a=>{const c=document.createElement('span');c.className='chip on'
     c.classList.toggle('on',state.anios.has(a));render();};fAnios.appendChild(c);});
 const fRegion=$('#fRegion');fRegion.innerHTML='<option value="">Todas las regiones</option>'+
   M.regiones.map(r=>`<option value="${r.cod}">${r.nombre}</option>`).join('');
-fRegion.onchange=()=>{state.region=fRegion.value?+fRegion.value:null;state.comuna=null;fillComunas();render();};
+fRegion.onchange=()=>{state.region=fRegion.value?+fRegion.value:null;state.comuna=null;state.metro=null;fillComunas();render();};
 const fComuna=$('#fComuna');
 function fillComunas(){const list=state.region!=null?(comunasByCod[state.region]||[]):D.comunas.map((_,i)=>i);
   const opts=list.map(i=>({i,n:D.comunas[i].nombre})).sort((a,b)=>a.n.localeCompare(b.n));
-  fComuna.innerHTML='<option value="">Todas</option>'+opts.map(o=>`<option value="${o.i}">${o.n}</option>`).join('');
-  fComuna.value=state.comuna!=null?state.comuna:'';}
-fComuna.onchange=()=>selectComuna(fComuna.value!==''?+fComuna.value:null);
-function selectComuna(ci){state.comuna=ci;
+  const mets=METROS.map((m,i)=>({m,i}));   // todas siempre (permite saltar entre ciudades)
+  let html='<option value="">Todas</option>';
+  if(mets.length)html+='<optgroup label="Áreas metropolitanas">'+mets.map(x=>`<option value="m${x.i}">◆ ${x.m.nombre}</option>`).join('')+'</optgroup>';
+  html+='<optgroup label="Comunas">'+opts.map(o=>`<option value="${o.i}">${o.n}</option>`).join('')+'</optgroup>';
+  fComuna.innerHTML=html;
+  fComuna.value=state.comuna!=null?state.comuna:state.metro!=null?('m'+state.metro):'';}
+fComuna.onchange=()=>{const v=fComuna.value;if(v==='')selectComuna(null);else if(v[0]==='m')selectMetro(+v.slice(1));else selectComuna(+v);};
+function selectMetro(idx){state.metro=idx;state.comuna=null;state.region=METROS[idx].cod;fRegion.value=state.region;
+  if(currentView==='siniestros')state.mapMode='choropleth';fillComunas();fComuna.value='m'+idx;syncModeBtns();render();}
+function selectComuna(ci){state.comuna=ci;state.metro=null;
   if(ci!=null){state.region=D.comunas[ci].cod;fRegion.value=state.region;fillComunas();fComuna.value=ci;if(currentView==='siniestros')state.mapMode='heat';}
   else{if(currentView==='siniestros')state.mapMode='choropleth';fComuna.value='';}
   syncModeBtns();render();}
@@ -354,7 +375,7 @@ const fModo=$('#fModo');fModo.innerHTML='<option value="">Todos los modos</optio
 fModo.onchange=()=>{state.modo=fModo.value!==''?+fModo.value:null;render();};
 const fZona=$('#fZona');fZona.innerHTML='<option value="">Todas las zonas</option><option value="0">Urbana</option><option value="1">Rural</option>';
 fZona.onchange=()=>{state.zona=fZona.value?+fZona.value:null;render();};
-$('#reset').onclick=()=>{state.anios=new Set(M.anios);state.region=null;state.comuna=null;state.modo=null;state.zona=null;state.mapMode='choropleth';
+$('#reset').onclick=()=>{state.anios=new Set(M.anios);state.region=null;state.comuna=null;state.metro=null;state.modo=null;state.zona=null;state.mapMode='choropleth';
   [...fAnios.children].forEach(c=>c.classList.add('on'));fRegion.value='';fModo.value='';fZona.value='';fillComunas();syncModeBtns();render();};
 
 const zonaOk=z=>state.zona==null||z===state.zona;
@@ -367,9 +388,8 @@ function aggGeo(){
   const porAnio=new Map(),porAnioModo=new Map();let T={s:0,m:0,g:0,mg:0,l:0};
   for(const [ci,an,mo,zo,s,m,g,mg,l] of D.factGeo){
     if(!anioOk(an)||!zonaOk(zo)||!modoOk(mo))continue;
-    if(state.comuna!=null&&ci!==state.comuna)continue;
+    if(!inScope(ci))continue;
     const com=D.comunas[ci];
-    if(state.region!=null&&com.cod!==state.region)continue;
     T.s+=s;T.m+=m;T.g+=g;T.mg+=mg;T.l+=l;porModo[mo]+=s;
     let pc=porComuna.get(ci);if(!pc){pc={s:0,m:0,g:0,mg:0,l:0};porComuna.set(ci,pc);}
     pc.s+=s;pc.m+=m;pc.g+=g;pc.mg+=mg;pc.l+=l;
@@ -386,9 +406,9 @@ function aggDim(fact,size){const arr=new Array(size).fill(0),arrM=new Array(size
 
 /* ---------- KPIs ---------- */
 function renderKpis(A){
-  const pob=state.comuna!=null?D.comunas[state.comuna].pob:state.region!=null?regPob(state.region):M.regiones.reduce((a,r)=>a+r.poblacion,0);
+  const pob=scopePob();
   const tasa=pob?A.T.m/pob*100000:null;
-  const ambito=state.comuna!=null?D.comunas[state.comuna].nombre:state.region!=null?regName(state.region).replace('Región ',''):'país';
+  const ambito=scopeName();
   let last;
   if(state.comuna!=null)last=['Población (Censo 2017)',fmt(pob),'habitantes'];
   else{let tc='—',tv=-1;for(const [ci,v] of A.porComuna)if(v.m>tv){tv=v.m;tc=D.comunas[ci].nombre;}last=['Comuna + fallecidos',tc,fmt(tv)+' fallecidos'];}
@@ -464,7 +484,7 @@ function renderTop(A){
 }
 
 /* ---------- Mapa ---------- */
-let map,comunaLayer,regionLayer,heatLayer,curAgg,lastRegion=null,lastComuna=null;
+let map,comunaLayer,regionLayer,heatLayer,curAgg,lastRegion=null,lastComuna=null,lastMetro=null;
 let baseStreets,baseSat,baseLabels;
 function initMap(){
   map=L.map('map',{zoomControl:true,attributionControl:true,preferCanvas:true}).setView([-38,-71.5],4);
@@ -525,11 +545,9 @@ function renderMap(A){curAgg=A;computeBreaks(A);
   if(heat){comunaLayer.setStyle({fillOpacity:0,weight:.3,color:'#8a93a5'});renderHeat();}
   else{if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}comunaLayer.setStyle(featStyle);$('#mapFoot').textContent='';}
   renderLegend();
-  if(state.comuna!==lastComuna||state.region!==lastRegion){lastComuna=state.comuna;lastRegion=state.region;
-    let gj=null;
-    if(state.comuna!=null)gj=D.geoComunas.features.find(f=>comIdxByCut[f.properties.cut_com]===state.comuna);
-    else if(state.region!=null)gj=D.geoRegiones.features.find(f=>f.properties.cod_region===state.region);
-    if(gj){try{map.fitBounds(L.geoJSON(gj).getBounds(),{padding:[12,12],animate:false});}catch(e){}}
+  if(state.comuna!==lastComuna||state.region!==lastRegion||state.metro!==lastMetro){lastComuna=state.comuna;lastRegion=state.region;lastMetro=state.metro;
+    const bnds=scopeBounds();
+    if(bnds){try{map.fitBounds(bnds,{padding:[12,12],animate:false});}catch(e){}}
     else map.setView([-38,-71.5],4,{animate:false});}
 }
 $('#mapMetric').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#mapMetric').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');state.metric=b.dataset.m;renderMap(curAgg);});
@@ -539,15 +557,16 @@ $('#mapBase').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#mapBase')
 /* ---------- Render maestro ---------- */
 function renderBreadcrumb(){const bc=$('#breadcrumb'),parts=['<b>Chile</b>'];
   if(state.region!=null)parts.push(`<span class="cx" onclick="clearComuna()">${regName(state.region).replace('Región ','')}</span>`);
+  if(state.metro!=null)parts.push(`<b>◆ ${METROS[state.metro].nombre}</b> <span class="cx" title="quitar" onclick="clearComuna()">✕</span>`);
   if(state.comuna!=null)parts.push(`<b>${D.comunas[state.comuna].nombre}</b> <span class="cx" title="quitar" onclick="clearComuna()">✕</span>`);
-  bc.innerHTML=parts.join(' › ')+(state.comuna!=null?'  — tendencia y zonas de concentración de esta comuna':'  — clic en una comuna (mapa o tabla) para ver su tendencia y sus zonas');}
+  bc.innerHTML=parts.join(' › ')+((state.comuna!=null||state.metro!=null)?'  — detalle del territorio seleccionado':'  — clic en una comuna (mapa o tabla), o elige un área metropolitana en el filtro');}
 window.clearComuna=()=>selectComuna(null);
 let currentView='siniestros';
 function render(){
   if(currentView==='personas'){renderPersonas();return;}
   if(currentView==='espacial'){renderEspacial(true);return;}
   const A=aggGeo();renderKpis(A);renderCharts(A);renderTop(A);renderMap(A);renderBreadcrumb();
-  const amb=state.comuna!=null?D.comunas[state.comuna].nombre:state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
+  const amb=scopeName();
   $('#mapHint').textContent='· '+amb;
   $('#mapDesc').textContent=state.mapMode==='heat'?'Zonas con mayor densidad de siniestros dentro de la ciudad (mapa de calor).':'Color por '+metricLabel[state.metric]+'. Clic en una comuna para ver su detalle.';
   if($('#anioTitle').firstChild) $('#anioTitle').childNodes[0].nodeValue='Evolución anual por modo — '+amb;
@@ -556,7 +575,7 @@ function render(){
 /* ---------- Vista PERSONAS accidentadas (fase 2) ---------- */
 const PZ=D.personas;
 const PAL_EDAD=['#6BAED6','#4292C6','#2171B5','#B2182B','#B0B7C3']; // niños..jóvenes..mayores(rojo)..no informa
-const persComOk=ci=>state.comuna!=null?ci===state.comuna:(state.region==null||D.comunas[ci].cod===state.region);
+const persComOk=ci=>inScope(ci);
 function aggPers(fact,size){const n=new Array(size).fill(0),f=new Array(size).fill(0);
   for(const [ci,an,idx,nv,fv] of fact){if(!anioOk(an)||!persComOk(ci))continue;n[idx]+=nv;f[idx]+=fv;}
   return {n,f};}
@@ -566,7 +585,7 @@ function aggPiramide(){const R=PZ.rangos.length,S=PZ.sexos.length;const m=Array.
 function renderPersonas(){
   if(!PZ){$('#viewPersonas').innerHTML='<div class="card">Datos de personas no disponibles.</div>';return;}
   const tick=css('--ink-lo'),grid=css('--line'),dgr=css('--red'),acc=css('--accent'),teal=css('--teal');
-  const amb=state.comuna!=null?D.comunas[state.comuna].nombre:state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
+  const amb=scopeName();
   $('#persLead').textContent=`Análisis a nivel de persona (accidentados) — ${amb}, ${PZ.anios[0]}–${PZ.anios[PZ.anios.length-1]}. Un siniestro involucra a varias personas; aquí se cuentan las personas, no los siniestros. Responde a los filtros de año, región y comuna.`;
   const ed=aggPers(PZ.edad,PZ.catEdad.length);
   const totN=ed.n.reduce((a,b)=>a+b,0),totF=ed.f.reduce((a,b)=>a+b,0);
@@ -628,7 +647,7 @@ const maxOf=(arr,f)=>{let m=1;for(const x of arr){const v=f(x);if(v>m)m=v;}retur
 const wOf=p=>ESP.metric==='f'?p[7]:1;
 function espFiltered(){const out=[],y0=M.anios[0];
   for(const p of D.puntos){if(!anioOk(p[2]+y0)||!zonaOk(p[6])||!modoOk(p[4]))continue;
-    if(state.comuna!=null){if(p[8]!==state.comuna)continue;}else if(state.region!=null&&p[3]!==state.region)continue;
+    if(p[8]>=0){if(!inScope(p[8]))continue;}else{if(state.comuna!=null||state.metro!=null)continue;if(state.region!=null&&p[3]!==state.region)continue;}
     out.push(p);}
   return out;}
 function h3res(z){return z<5?4:z<6.5?5:z<8?6:z<10?7:z<12?8:9;}
@@ -722,10 +741,8 @@ function initDeck(){if(deckgl)return;const el=document.getElementById('deckMap')
     layers:[]});}
 let espTimer=null;
 function scheduleEsp(){clearTimeout(espTimer);espTimer=setTimeout(()=>renderEspacial(true),200);}
-function fitEspView(){let vs=Object.assign({},espView),gj=null;
-  if(state.comuna!=null)gj=D.geoComunas.features.find(f=>comIdxByCut[f.properties.cut_com]===state.comuna);
-  else if(state.region!=null)gj=D.geoRegiones.features.find(f=>f.properties.cod_region===state.region);
-  if(gj){const b=L.geoJSON(gj).getBounds();vs.longitude=(b.getWest()+b.getEast())/2;vs.latitude=(b.getSouth()+b.getNorth())/2;
+function fitEspView(){let vs=Object.assign({},espView);const b=scopeBounds();
+  if(b){vs.longitude=(b.getWest()+b.getEast())/2;vs.latitude=(b.getSouth()+b.getNorth())/2;
     vs.zoom=Math.min(13,Math.max(6,Math.log2(360/Math.max(0.04,b.getEast()-b.getWest()))+1));}
   else{vs.longitude=-71.3;vs.latitude=-37;vs.zoom=3.7;}
   vs.pitch=ESP.mode==='hex'?45:0;vs.bearing=ESP.mode==='hex'?-12:0;espView=vs;deckgl.setProps({viewState:espView});}
@@ -737,9 +754,9 @@ function setEspDesc(){$('#espDesc').textContent=({hex:'Grillas hexagonales H3 co
 let lastEspScope='__';
 function renderEspacial(keepView){
   if(!deckgl)initDeck();
-  const scopeKey=state.region+'|'+state.comuna,scopeChanged=scopeKey!==lastEspScope;lastEspScope=scopeKey;
+  const scopeKey=state.region+'|'+state.comuna+'|'+state.metro,scopeChanged=scopeKey!==lastEspScope;lastEspScope=scopeKey;
   if(!keepView||scopeChanged)fitEspView();
-  const needScope=['hex','contour','cluster','red'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null;
+  const needScope=['hex','contour','cluster','red'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null||state.metro!=null;
   setEspDesc();
   if(needScope&&!scoped){$('#deckPrompt').style.display='flex';$('#espFoot').textContent='';$('#espLegend').innerHTML='';deckgl.setProps({layers:[basemapLayer()]});return;}
   $('#deckPrompt').style.display='none';
@@ -775,7 +792,11 @@ themeBtn.onclick=()=>{const d=!isDark();document.documentElement.setAttribute('d
   themeBtn.textContent=d?'☀':'☾';if(regionLayer)regionLayer.setStyle({color:css('--ink-lo')});render();};
 $('#cbBtn').onclick=()=>{state.cb=!state.cb;PAL_T=state.cb?PAL_T_CB:PAL_T_NORM;PAL_M=state.cb?PAL_M_CB:PAL_M_NORM;$('#cbBtn').style.color=state.cb?'#ff9d2f':'';render();};
 
+// Arranca enfocado en el Gran Concepción (desde ahí se salta a otras ciudades/áreas)
+const _gc=METROS.findIndex(m=>/concep/i.test(m.nombre));
+if(_gc>=0){state.metro=_gc;state.region=METROS[_gc].cod;fRegion.value=state.region;}
 fillComunas();
+if(state.metro!=null)fComuna.value='m'+state.metro;
 initMap();
 render();
 setTimeout(()=>{map.invalidateSize();renderMap(curAgg);},250);
