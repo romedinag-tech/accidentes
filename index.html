@@ -148,7 +148,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 <header class="apptop">
   <div>
     <div class="brand">Siniestros de Tránsito en Chile</div>
-    <div class="sub" id="hsub">Observatorio CONASET · 2020–2024</div>
+    <div class="sub" id="hsub">Base consolidada CONASET · 2020–2025</div>
   </div>
   <div class="right">
     <span class="live-badge"><span class="led"></span> Datos abiertos</span>
@@ -169,7 +169,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     <div class="fg"><label>Años</label><div class="chips" id="fAnios"></div></div>
     <div class="fg"><label>Región</label><select id="fRegion"></select></div>
     <div class="fg"><label>Comuna / ciudad</label><select id="fComuna"></select></div>
-    <div class="fg"><label>Tipo de siniestro</label><select id="fTipo"></select></div>
+    <div class="fg"><label>Modo involucrado</label><select id="fModo"></select></div>
     <div class="fg"><label>Zona</label><select id="fZona"></select></div>
     <div class="fg"><label>&nbsp;</label><button class="tbtn" id="reset">Limpiar filtros</button></div>
   </div>
@@ -204,8 +204,8 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <div class="mapfoot" id="mapFoot"></div>
     </div>
     <div class="card">
-      <h2 id="anioTitle">Evolución anual por tipo</h2>
-      <p class="desc">Altura total = siniestros del año; cada color, un tipo. La línea marca los fallecidos.</p>
+      <h2 id="anioTitle">Evolución anual por modo</h2>
+      <p class="desc">Altura total = siniestros del año; cada color, un modo involucrado. La línea marca los fallecidos.</p>
       <div class="chartbox"><canvas id="cAnio"></canvas></div>
       <h3>Siniestros por región</h3>
       <div class="chartbox" style="height:300px"><canvas id="cRegion"></canvas></div>
@@ -213,21 +213,23 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </div>
 
   <div class="charts2">
+    <div class="card"><h2>Por modo involucrado</h2><p class="desc">Peatón (atropello), motocicleta o bicicleta; el resto, vehículo. Un siniestro se asigna a un solo modo por prioridad (peatón &gt; moto &gt; bici &gt; vehículo).</p><div class="chartbox sm"><canvas id="cModo"></canvas></div></div>
     <div class="card"><h2>Por tipo de siniestro</h2><div class="chartbox sm"><canvas id="cTipo"></canvas></div></div>
-    <div class="card"><h2>Principales causas <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cCausa"></canvas></div></div>
   </div>
 
   <div class="charts2">
-    <div class="card"><h2>Estacionalidad por mes <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cMes"></canvas></div></div>
-    <div class="card"><h2>Por hora del día <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cHora"></canvas></div></div>
+    <div class="card"><h2>Principales causas <span class="hint">(clasificación agrupada CONASET)</span></h2><div class="chartbox sm"><canvas id="cCausa"></canvas></div></div>
+    <div class="card"><h2>Estacionalidad por mes</h2><div class="chartbox sm"><canvas id="cMes"></canvas></div></div>
   </div>
 
-  <div class="grid">
-    <div class="card"><h2>Por día de la semana <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cDia"></canvas></div></div>
-    <div class="card">
-      <h2>Comunas con más siniestros <span class="hint">clic para ver la ciudad</span></h2>
-      <div style="max-height:300px;overflow:auto"><table id="tTop"></table></div>
-    </div>
+  <div class="charts2">
+    <div class="card"><h2>Por hora del día</h2><div class="chartbox sm"><canvas id="cHora"></canvas></div></div>
+    <div class="card"><h2>Por día de la semana</h2><div class="chartbox sm"><canvas id="cDia"></canvas></div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
+    <h2>Comunas con más siniestros <span class="hint">clic para ver la ciudad</span></h2>
+    <div style="max-height:340px;overflow:auto"><table id="tTop"></table></div>
   </div>
 
   <footer>
@@ -236,7 +238,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </footer>
 </div>
 
-<script src="data_bundle.js?v=2"></script>
+<script src="data_bundle.js?v=3"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const $=s=>document.querySelector(s);
@@ -247,7 +249,7 @@ const regPob=c=>(M.regiones.find(r=>r.cod===c)||{}).poblacion||0;
 const cap=s=>s.charAt(0)+s.slice(1).toLowerCase();
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-const state={anios:new Set(M.anios),region:null,comuna:null,tipo:null,zona:null,metric:'s',mapMode:'choropleth',base:'calles',cb:false};
+const state={anios:new Set(M.anios),region:null,comuna:null,modo:null,zona:null,metric:'s',mapMode:'choropleth',base:'calles',cb:false};
 const comunasByCod={}; D.comunas.forEach((c,i)=>{(comunasByCod[c.cod]=comunasByCod[c.cod]||[]).push(i);});
 const comIdxByCut={}; D.comunas.forEach((c,i)=>comIdxByCut[c.cut]=i);
 
@@ -256,6 +258,9 @@ const PAL=['#eff3fb','#c6d9f0','#9ec0e3','#6ba3d6','#4a80c0','#2f66ad','#1c4d8f'
 const PAL_T_NORM=['#1F6FEB','#3F8E86','#C55A11','#B2182B','#7048b6','#2E8B57','#c94f9a'];
 const PAL_T_CB  =['#0072B2','#E69F00','#009E73','#D55E00','#CC79A7','#56B4E9','#666666']; // Okabe-Ito
 let PAL_T=PAL_T_NORM;
+const PAL_M_NORM=['#B2182B','#E08214','#2E8B57','#4A80C0']; // Peatón, Moto, Bici, Vehículo
+const PAL_M_CB  =['#D55E00','#E69F00','#009E73','#0072B2'];
+let PAL_M=PAL_M_NORM;
 const HEAT_GRAD={0.15:'#2b1a54',0.35:'#8c2981',0.6:'#de4968',0.8:'#fb8861',1.0:'#fcfdbf'}; // magma (secuencial, CB-safe)
 
 /* ---------- Filtros ---------- */
@@ -277,42 +282,40 @@ function selectComuna(ci){state.comuna=ci;
   else{state.mapMode='choropleth';fComuna.value='';}
   syncModeBtns();render();}
 function syncModeBtns(){$('#mapMode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.mode===state.mapMode));}
-const fTipo=$('#fTipo');fTipo.innerHTML='<option value="">Todos los tipos</option>'+
-  M.tipos.map((t,i)=>`<option value="${i}">${cap(t)}</option>`).join('');
-fTipo.onchange=()=>{state.tipo=fTipo.value?+fTipo.value:null;render();};
+const fModo=$('#fModo');fModo.innerHTML='<option value="">Todos los modos</option>'+
+  M.modos.map((t,i)=>`<option value="${i}">${t}</option>`).join('');
+fModo.onchange=()=>{state.modo=fModo.value!==''?+fModo.value:null;render();};
 const fZona=$('#fZona');fZona.innerHTML='<option value="">Todas las zonas</option><option value="0">Urbana</option><option value="1">Rural</option>';
 fZona.onchange=()=>{state.zona=fZona.value?+fZona.value:null;render();};
-$('#reset').onclick=()=>{state.anios=new Set(M.anios);state.region=null;state.comuna=null;state.tipo=null;state.zona=null;state.mapMode='choropleth';
-  [...fAnios.children].forEach(c=>c.classList.add('on'));fRegion.value='';fTipo.value='';fZona.value='';fillComunas();syncModeBtns();render();};
+$('#reset').onclick=()=>{state.anios=new Set(M.anios);state.region=null;state.comuna=null;state.modo=null;state.zona=null;state.mapMode='choropleth';
+  [...fAnios.children].forEach(c=>c.classList.add('on'));fRegion.value='';fModo.value='';fZona.value='';fillComunas();syncModeBtns();render();};
 
 const zonaOk=z=>state.zona==null||z===state.zona;
+const modoOk=mo=>state.modo==null||mo===state.modo;
 const anioOk=a=>state.anios.has(a);
 
 /* ---------- Agregación ---------- */
 function aggGeo(){
-  const porComuna=new Map(),porRegion=new Map(),porTipo=new Array(M.tipos.length).fill(0);
-  const porAnio=new Map(),porAnioTipo=new Map();let T={s:0,m:0,g:0,mg:0,l:0};
-  for(const [ci,an,ti,zo,s,m,g,mg,l] of D.factGeo){
-    if(!anioOk(an)||!zonaOk(zo))continue;
-    if(state.tipo!=null&&ti!==state.tipo)continue;
+  const porComuna=new Map(),porRegion=new Map(),porModo=new Array(M.modos.length).fill(0);
+  const porAnio=new Map(),porAnioModo=new Map();let T={s:0,m:0,g:0,mg:0,l:0};
+  for(const [ci,an,mo,zo,s,m,g,mg,l] of D.factGeo){
+    if(!anioOk(an)||!zonaOk(zo)||!modoOk(mo))continue;
     if(state.comuna!=null&&ci!==state.comuna)continue;
     const com=D.comunas[ci];
     if(state.region!=null&&com.cod!==state.region)continue;
-    T.s+=s;T.m+=m;T.g+=g;T.mg+=mg;T.l+=l;porTipo[ti]+=s;
+    T.s+=s;T.m+=m;T.g+=g;T.mg+=mg;T.l+=l;porModo[mo]+=s;
     let pc=porComuna.get(ci);if(!pc){pc={s:0,m:0,g:0,mg:0,l:0};porComuna.set(ci,pc);}
     pc.s+=s;pc.m+=m;pc.g+=g;pc.mg+=mg;pc.l+=l;
     let pr=porRegion.get(com.cod)||{s:0,m:0};pr.s+=s;pr.m+=m;porRegion.set(com.cod,pr);
     let pa=porAnio.get(an)||{s:0,m:0};pa.s+=s;pa.m+=m;porAnio.set(an,pa);
-    let at=porAnioTipo.get(an);if(!at){at=new Array(M.tipos.length).fill(0);porAnioTipo.set(an,at);}at[ti]+=s;
+    let at=porAnioModo.get(an);if(!at){at=new Array(M.modos.length).fill(0);porAnioModo.set(an,at);}at[mo]+=s;
   }
-  return {porComuna,porRegion,porTipo,porAnio,porAnioTipo,T};
+  return {porComuna,porRegion,porModo,porAnio,porAnioModo,T};
 }
+// facts secundarios keyed [cod_region, anio, modo, dim, s, m] — filtran año/región/modo
 function aggDim(fact,size){const arr=new Array(size).fill(0),arrM=new Array(size).fill(0);
-  for(const [cod,an,d,zo,s,m] of fact){if(!anioOk(an)||!zonaOk(zo))continue;if(state.region!=null&&cod!==state.region)continue;arr[d]+=s;arrM[d]+=m;}
+  for(const [cod,an,mo,d,s,m] of fact){if(!anioOk(an)||!modoOk(mo))continue;if(state.region!=null&&cod!==state.region)continue;arr[d]+=s;arrM[d]+=m;}
   return {s:arr,m:arrM};}
-function aggCausa(){const s=new Array(M.causas.length).fill(0);
-  for(const [cod,an,ci,zo,sv] of D.factCausa){if(!anioOk(an)||!zonaOk(zo))continue;if(state.region!=null&&cod!==state.region)continue;s[ci]+=sv;}
-  return s;}
 
 /* ---------- KPIs ---------- */
 function renderKpis(A){
@@ -344,11 +347,12 @@ function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart($('#
 function renderCharts(A){
   const acc=css('--accent'),teal=css('--teal'),dgr=css('--red'),tick=css('--ink-lo'),grid=css('--line');
   const anios=M.anios;
-  const tsel=state.tipo!=null?[state.tipo]:M.tipos.map((_,i)=>i);
-  const tipoDS=tsel.map(ti=>({label:cap(M.tipos[ti]),data:anios.map(a=>(A.porAnioTipo.get(a)||[])[ti]||0),
-    backgroundColor:PAL_T[ti%PAL_T.length],borderRadius:3,stack:'s',yAxisID:'y'}));
+  // Evolución anual APILADA por MODO involucrado (+ línea de fallecidos)
+  const msel=state.modo!=null?[state.modo]:M.modos.map((_,i)=>i);
+  const modoDS=msel.map(mo=>({label:M.modos[mo],data:anios.map(a=>(A.porAnioModo.get(a)||[])[mo]||0),
+    backgroundColor:PAL_M[mo%PAL_M.length],borderRadius:3,stack:'s',yAxisID:'y'}));
   const mA=anios.map(a=>(A.porAnio.get(a)||{}).m||0);
-  mk('cAnio',{type:'bar',data:{labels:anios,datasets:[...tipoDS,
+  mk('cAnio',{type:'bar',data:{labels:anios,datasets:[...modoDS,
     {type:'line',label:'Fallecidos',data:mA,borderColor:dgr,backgroundColor:dgr,borderWidth:2,tension:.3,yAxisID:'y1'}]},
     options:{...baseOpts(),plugins:{legend:{display:true,position:'bottom',labels:{color:tick,boxWidth:11,font:{size:10}}}},
       scales:{x:{stacked:true,grid:{color:grid},ticks:{color:tick}},
@@ -358,11 +362,18 @@ function renderCharts(A){
   mk('cRegion',{type:'bar',data:{labels:regs.map(r=>r.nombre.replace('Región ','')),
     datasets:[{label:'Siniestros',data:regs.map(r=>(A.porRegion.get(r.cod)||{}).s||0),backgroundColor:acc,borderRadius:4}]},
     options:{...baseOpts(),indexAxis:'y'}});
-  const ti=M.tipos.map((t,i)=>[cap(t),A.porTipo[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
-  mk('cTipo',{type:'bar',data:{labels:ti.map(x=>x[0]),datasets:[{label:'Siniestros',data:ti.map(x=>x[1]),
-    backgroundColor:ti.map(x=>PAL_T[M.tipos.indexOf(x[0].toUpperCase())%PAL_T.length]||acc),borderRadius:4}]},
+  // Por MODO involucrado (siniestros)
+  mk('cModo',{type:'bar',data:{labels:M.modos,datasets:[{label:'Siniestros',data:A.porModo,
+    backgroundColor:M.modos.map((_,i)=>PAL_M[i]),borderRadius:5}]},
+    options:{...baseOpts(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.y)}}}}});
+  // Por tipo de siniestro
+  const tD=aggDim(D.factTipo,M.tipos.length);
+  const ti=M.tipos.map((t,i)=>[cap(t),tD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  mk('cTipo',{type:'bar',data:{labels:ti.map(x=>x[0]),datasets:[{label:'Siniestros',data:ti.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},
     options:{...baseOpts(),indexAxis:'y'}});
-  const cs=aggCausa(),ci=M.causas.map((c,i)=>[cap(c),cs[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  // Principales causas (clasificación agrupada CONASET)
+  const cD=aggDim(D.factCausa,M.causas.length);
+  const ci=M.causas.map((c,i)=>[cap(c),cD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
   mk('cCausa',{type:'bar',data:{labels:ci.map(x=>x[0]),datasets:[{label:'Siniestros',data:ci.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
     options:{...baseOpts(),indexAxis:'y'}});
   const mes=aggDim(D.factMes,13),ML=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -422,15 +433,17 @@ function tipText(cut){const i=comIdxByCut[cut],com=D.comunas[i],v=curAgg&&curAgg
   const t=(com&&com.pob&&v)?v.m/com.pob*100000:null;
   return `<b style="font-family:inherit;color:var(--ink)">${com?com.nombre:cut}</b><br>${com?regName(com.cod).replace('Región ',''):''}`+
     (v?`<br>Siniestros: <b>${fmt(v.s)}</b> · Fallecidos: <b>${fmt(v.m)}</b><br>Tasa: <b>${fmt1(t)}</b>/100k`:'<br><i>sin datos en el filtro</i>');}
-function buildHeat(){const useM=state.metric==='m';const pts=[];let maxw=0;
-  for(const [la,lo,ci,s,m] of D.gridHot){
+function buildHeat(){const useM=state.metric==='m';const agg=new Map();let maxw=0;
+  for(const [la,lo,ci,mo,s,m] of D.gridHot){
+    if(!modoOk(mo))continue;
     if(state.comuna!=null){if(ci!==state.comuna)continue;}else if(state.region!=null){if(D.comunas[ci].cod!==state.region)continue;}
-    const w=useM?m:s;if(w<=0)continue;if(w>maxw)maxw=w;pts.push([la,lo,w]);}
+    const w=useM?m:s;if(w<=0)continue;const k=la+','+lo;agg.set(k,(agg.get(k)||0)+w);}
+  const pts=[];for(const [k,w] of agg){const [la,lo]=k.split(',');if(w>maxw)maxw=w;pts.push([+la,+lo,w]);}
   return {pts,maxw};}
 function renderHeat(){if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}
   const {pts,maxw}=buildHeat();
   heatLayer=L.heatLayer(pts,{radius:18,blur:15,maxZoom:16,max:Math.max(1,maxw*0.6),gradient:HEAT_GRAD}).addTo(map);
-  $('#mapFoot').textContent=`${fmt(pts.length)} celdas de ~330 m · densidad de ${state.metric==='m'?'fallecidos':'siniestros'} acumulados ${M.anios[0]}–${M.anios[M.anios.length-1]} · no filtra por tipo`;}
+  $('#mapFoot').textContent=`${fmt(pts.length)} celdas de ~330 m · densidad de ${state.metric==='m'?'fallecidos':'siniestros'}${state.modo!=null?' — '+M.modos[state.modo]:''} · acumulado ${M.anios[0]}–${M.anios[M.anios.length-1]}`;}
 function renderLegend(){
   const heat=state.mapMode==='heat';
   if(heat){$('#legend').innerHTML='<span>menos</span>'+['#2b1a54','#8c2981','#de4968','#fb8861','#fcfdbf'].map(c=>`<i style="background:${c}"></i>`).join('')+'<span>más</span><span style="margin-left:6px">· densidad de '+(state.metric==='m'?'fallecidos':'siniestros')+'</span>';return;}
@@ -466,15 +479,16 @@ function render(){const A=aggGeo();renderKpis(A);renderCharts(A);renderTop(A);re
   const amb=state.comuna!=null?D.comunas[state.comuna].nombre:state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
   $('#mapHint').textContent='· '+amb;
   $('#mapDesc').textContent=state.mapMode==='heat'?'Zonas con mayor densidad de siniestros dentro de la ciudad (mapa de calor).':'Color por '+metricLabel[state.metric]+'. Clic en una comuna para ver su detalle.';
-  $('#anioTitle').firstChild ? $('#anioTitle').childNodes[0].nodeValue='Evolución anual por tipo — '+amb : null;
+  if($('#anioTitle').firstChild) $('#anioTitle').childNodes[0].nodeValue='Evolución anual por modo — '+amb;
 }
 
 /* ---------- Init ---------- */
 const totalS=D.factGeo.reduce((a,r)=>a+r[4],0);
-$('#lead').textContent=`${fmt(totalS)} siniestros de tránsito georreferenciados en Chile entre ${M.anios[0]} y ${M.anios[M.anios.length-1]}, deduplicados por identificador de siniestro. Explora por región, comuna, tipo, causa y momento; el mapa muestra dónde se concentran.`;
+$('#lead').textContent=`${fmt(totalS)} siniestros de tránsito georreferenciados en Chile entre ${M.anios[0]} y ${M.anios[M.anios.length-1]} (urbano y rural). Explora por región, comuna, modo involucrado, causa y momento; el mapa muestra dónde se concentran.`;
 $('#method').innerHTML=`<b>Fuente:</b> ${M.fuente}. <b>Cartografía:</b> DPA Censal 2017 (Esri Chile), 345 comunas / 16 regiones. `+
-  `<b>Cobertura:</b> ${M.nota} <b>Deduplicación:</b> cada siniestro puede aparecer en un archivo nacional (solo urbano) y en uno regional (con zona rural); se unen y se deduplica por <i>id de siniestro</i> prefiriendo el registro regional, combinando urbano+rural sin doble conteo. `+
-  `<b>Tasas:</b> por 100 mil habitantes con población del Censo 2017. Los gráficos de mes, hora, día y causa responden a los filtros de año/región/zona, no al de tipo. Datos referenciales.`;
+  `<b>Alcance:</b> ${M.nota} `+
+  `<b>Modo involucrado:</b> el peatón se identifica por el flag de atropello; motocicleta y bicicleta por su participación en el siniestro. Bus, camión y otros vehículos no vienen marcados por separado en esta base y se agrupan como "vehículo". `+
+  `<b>Tasas:</b> por 100 mil habitantes con población del Censo 2017. Los gráficos de tipo, causa, mes, hora y día responden a los filtros de año, región y modo (no a comuna ni zona). Datos referenciales.`;
 $('#foot').textContent=`Actualizado ${M.generado} · Rodrigo Medina González`;
 
 const themeBtn=$('#themeBtn');
@@ -484,7 +498,7 @@ themeBtn.textContent=isDark()?'☀':'☾';
 themeBtn.onclick=()=>{const d=!isDark();document.documentElement.setAttribute('data-theme',d?'dark':'light');
   try{localStorage.setItem('theme-acc',d?'dark':'light');}catch(e){}
   themeBtn.textContent=d?'☀':'☾';if(regionLayer)regionLayer.setStyle({color:css('--ink-lo')});render();};
-$('#cbBtn').onclick=()=>{state.cb=!state.cb;PAL_T=state.cb?PAL_T_CB:PAL_T_NORM;$('#cbBtn').style.color=state.cb?'#ff9d2f':'';render();};
+$('#cbBtn').onclick=()=>{state.cb=!state.cb;PAL_T=state.cb?PAL_T_CB:PAL_T_NORM;PAL_M=state.cb?PAL_M_CB:PAL_M_NORM;$('#cbBtn').style.color=state.cb?'#ff9d2f':'';render();};
 
 fillComunas();
 initMap();

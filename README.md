@@ -1,6 +1,6 @@
 # Dashboard de Accidentes de Tránsito — Chile
 
-Dashboard web de **siniestros de tránsito en Chile** (CONASET), 2020–2024, y toda la base de datos
+Dashboard web de **siniestros de tránsito en Chile** (CONASET), 2020–2025, y toda la base de datos
 georreferenciada que lo alimenta.
 
 ## El dashboard
@@ -10,7 +10,14 @@ los datos embebidos en `data_bundle.js`). Para verlo: abrir `index.html` en el n
 
 Incluye: KPIs (siniestros, fallecidos, lesionados, tasa por 100 mil hab.), **mapa comunal** (coropleta
 por siniestros / fallecidos / tasa / graves), evolución anual, y desgloses por región, tipo, causa,
-mes, hora y día de la semana. Filtros: año, región, **comuna**, tipo de siniestro y zona (urbana/rural).
+mes, hora y día de la semana. Filtros: año, región, **comuna**, **modo involucrado** y zona (urbana/rural).
+
+**Base:** `Base_SINIESTROS_2020_2025` de CONASET (436.521 siniestros, urbano+rural, incluye 2025), con
+banderas de **modo involucrado** (peatón/atropello, motocicleta, bicicleta; el resto = vehículo) y causa
+agrupada. Reemplazó a la base 2020–2024 anterior. Descarga: `scripts/descargar_base_2025.py` →
+`scripts/convertir_base_2025.py` → `procesar_accidentes.py`. **Edad del accidentado** (niños/adultos/
+mayores) NO está en el portal de mapas: vive en el Observatorio CONASET (`estadconaset.mtt.gob.cl`) —
+pendiente como fase 2.
 
 Dos vistas de análisis focalizado:
 - **Tendencia por ciudad segmentada por tipo.** Al elegir una comuna (clic en el mapa o selector),
