@@ -123,6 +123,15 @@ select{background:var(--surface-alt);border:1px solid var(--line);color:var(--in
 .kpi{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
 .kpi .kic{position:absolute;top:14px;right:15px;color:var(--accent);opacity:.42}
 .kpi .kic .ic{width:22px;height:22px}
+/* Franja ilustrativa de frecuencia (ancho completo bajo los KPIs) */
+.kpi-banner{display:flex;align-items:center;gap:15px;margin:-6px 0 22px;padding:15px 20px;
+  background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);
+  border-radius:var(--r);box-shadow:var(--sh);font-family:var(--font-display);font-size:1.08rem;
+  line-height:1.45;color:var(--ink-mid)}
+:root[data-theme="dark"] .kpi-banner{background-image:var(--card-grad);box-shadow:var(--card-3d)}
+.kpi-banner .ic{width:26px;height:26px;flex:none;color:var(--accent)}
+.kpi-banner strong{color:var(--ink);font-weight:700}
+.kpi-banner .n{font-family:var(--font-data);color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
 :root[data-theme="dark"] .kpi{background-image:var(--card-grad);box-shadow:var(--card-3d)}
 .kpi .n{font-family:var(--font-data);font-size:1.7rem;font-weight:700;color:var(--navy);line-height:1.1;letter-spacing:-.02em}
 .kpi .l{color:var(--ink-mid);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:4px}
@@ -225,6 +234,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 
   <div id="viewSiniestros">
   <div class="kpis" id="kpis"></div>
+  <div class="kpi-banner" id="kpiFrase"></div>
 
   <div class="grid">
     <div class="card">
@@ -463,6 +473,34 @@ function renderKpis(A){
     last,
   ];
   $('#kpis').innerHTML=kpis.map(k=>`<div class="kpi"><span class="kic"><svg class="ic"><use href="#${k[3]||'i-alert'}"/></svg></span><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
+  renderFrase(A);
+}
+// Frecuencia adaptativa: si un evento ocurre >~1/día lo expresa "cada día N …",
+// si no, "cada N días …". Devuelve null si no hay eventos.
+function freqTxt(count,days){ if(!count||count<=0||days<=0) return null;
+  const perDay=count/days;
+  if(perDay>=1.4) return {perDay:true,val:Math.round(perDay)};
+  return {perDay:false,val:Math.max(1,Math.round(days/count))}; }
+function renderFrase(A){
+  const el=$('#kpiFrase'); if(!el) return;
+  const yrs=[...state.anios].map(Number).filter(y=>!isNaN(y));
+  const days=yrs.reduce((s,y)=>s+((y%4===0&&(y%100!==0||y%400===0))?366:365),0);
+  const muertos=A.T.m, sin=A.T.s, lesion=A.T.g+A.T.mg+A.T.l;
+  if(days<=0||sin<=0){el.style.display='none';return;}
+  el.style.display='flex';
+  const lug=scopeName(), en=lug==='todo Chile'?'todo Chile':lug;
+  const nn=v=>`<span class="n">${fmt(v)}</span>`;
+  const fm=freqTxt(muertos,days);
+  let f1;
+  if(!fm) f1=`no se registran fallecidos`;
+  else if(fm.perDay) f1=`cada día fallecen ${nn(fm.val)} persona${fm.val>1?'s':''}`;
+  else f1=fm.val===1?`cada día fallece <strong>una persona</strong>`:`cada ${nn(fm.val)} días fallece <strong>una persona</strong>`;
+  const le=freqTxt(lesion,days);
+  let f2;
+  if(!le) f2=`no se registran lesionados`;
+  else if(le.perDay) f2=`cada día resultan lesionadas ${nn(le.val)} persona${le.val>1?'s':''}`;
+  else f2=le.val===1?`cada día hay <strong>al menos un lesionado</strong>`:`cada ${nn(le.val)} días una persona resulta lesionada`;
+  el.innerHTML=`<svg class="ic"><use href="#i-pulse"/></svg><span>En <strong>${en}</strong>, ${f1} en el tránsito, y ${f2}.</span>`;
 }
 
 /* ---------- Charts ---------- */
