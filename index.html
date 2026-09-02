@@ -280,7 +280,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
           <button data-e="hex" class="on">Hexágonos 3D</button>
           <button data-e="contour">Contornos KDE</button>
           <button data-e="red">Red vial</button>
-          <button data-e="bivar">Riesgo bivariado</button>
+          <button data-e="riesgo">Riesgo (hex)</button>
           <button data-e="cluster">Clústeres</button>
         </div>
         <span class="seglab">Ponderar por</span>
@@ -684,8 +684,8 @@ function rampCol(t){t=Math.max(0,Math.min(0.999,t||0));return RAMP[Math.floor(t*
 const maxOf=(arr,f)=>{let m=1;for(const x of arr){const v=f(x);if(v>m)m=v;}return m;};
 const wOf=p=>ESP.metric==='f'?p[7]:1;
 /* ---- Carga por región (lazy): puntos y red vial se cargan solo del territorio elegido ---- */
-let SCOPE_POINTS=[],SCOPE_RED=[],loadedScopeKey='__',loadingScope=false;
-const ptsCache={},redCache={};
+let SCOPE_POINTS=[],SCOPE_RED=[],SCOPE_RIESGO=[],loadedScopeKey='__',loadingScope=false;
+const ptsCache={},redCache={},rieCache={};
 function scopeRegions(){if(state.comuna!=null)return[D.comunas[state.comuna].cod];
   if(state.metro!=null)return[...new Set(METROS[state.metro].coms.map(ci=>D.comunas[ci].cod))];
   if(state.region!=null)return[state.region];return[];}
@@ -695,8 +695,8 @@ function setLoading(on){const a=$('#mapLoading'),b=$('#deckLoading');if(a)a.styl
 function ensureScope(){const cods=scopeRegions(),key=cods.join(',');
   if(key===loadedScopeKey)return Promise.resolve();
   loadingScope=true;setLoading(true);
-  return Promise.all(cods.flatMap(c=>[_fetchReg(ptsCache,'data/puntos/',c),_fetchReg(redCache,'data/redvial/',c)]))
-    .then(()=>{SCOPE_POINTS=cods.flatMap(c=>ptsCache[c]||[]);SCOPE_RED=cods.flatMap(c=>redCache[c]||[]);
+  return Promise.all(cods.flatMap(c=>[_fetchReg(ptsCache,'data/puntos/',c),_fetchReg(redCache,'data/redvial/',c),_fetchReg(rieCache,'data/riesgo/',c)]))
+    .then(()=>{SCOPE_POINTS=cods.flatMap(c=>ptsCache[c]||[]);SCOPE_RED=cods.flatMap(c=>redCache[c]||[]);SCOPE_RIESGO=cods.flatMap(c=>rieCache[c]||[]);
       loadedScopeKey=key;loadingScope=false;setLoading(false);});}
 function espFiltered(){const out=[],y0=M.anios[0];
   for(const p of SCOPE_POINTS){if(!anioOk(p[2]+y0)||!zonaOk(p[6])||!modoOk(p[4]))continue;
@@ -741,18 +741,17 @@ function buildRed(){const data=SCOPE_RED;
 
 function terciles(vals){const v=vals.filter(x=>x>0).sort((a,b)=>a-b);if(v.length<3)return[0,0];return[v[Math.floor(v.length/3)],v[Math.floor(2*v.length/3)]];}
 const BIVAR=[[232,232,232],[199,204,224],[150,161,216],[220,180,150],[170,140,160],[110,110,180],[210,120,90],[150,90,110],[95,60,120]]; // 3x3
-function buildBivar(){const A=aggGeo();const rows=[];
-  for(const [ci,v] of A.porComuna){const pob=D.comunas[ci].pob;if(pob>0)rows.push({ci,acc:v.s,pob});}
-  const [ax,bx]=terciles(rows.map(r=>r.pob)),[ay,by]=terciles(rows.map(r=>r.acc));
-  const cls={};for(const r of rows){const xi=r.pob<=ax?0:r.pob<=bx?1:2,yi=r.acc<=ay?0:r.acc<=by?1:2;cls[D.comunas[r.ci].cut]={i:yi*3+xi,acc:r.acc,pob:r.pob,tasa:r.acc/r.pob*1e5,nombre:D.comunas[r.ci].nombre};}
-  $('#espFoot').textContent='Bivariado: eje X = población (exposición), eje Y = siniestros. El riesgo real está donde hay muchos siniestros con poca población (esquina roja): más siniestros que lo esperable por su tamaño.';
-  legendBivar();
-  return new deck.GeoJsonLayer({id:'bivar',data:D.geoComunas,pickable:true,stroked:true,filled:true,
-    getLineColor:[255,255,255,90],lineWidthUnits:'pixels',getLineWidth:0.5,
-    getFillColor:f=>{const c=cls[f.properties.cut_com];return c?[...BIVAR[c.i],205]:[200,200,200,40];},
-    updateTriggers:{getFillColor:[...state.anios,state.region,state.modo,state.zona]},
-    onHover:i=>{if(!i.object){hideTip();return;}const c=cls[i.object.properties.cut_com];
-      showTip(i,c?`<b>${c.nombre}</b><br>Siniestros: <b>${fmt(c.acc)}</b> · Pob.: ${fmt(c.pob)}<br>Tasa: <b>${fmt1(c.tasa)}</b>/100k`:'sin datos');}});}
+function buildRiesgo(){const D2=SCOPE_RIESGO;
+  if(!D2.length){$('#espFoot').textContent='Sin hexágonos con población suficiente en este territorio.';$('#espLegend').innerHTML='';return new deck.PolygonLayer({id:'riesgo',data:[]});}
+  const ts=D2.map(h=>h[3]).filter(x=>x>0).sort((a,b)=>a-b);
+  const brk=[];for(let i=1;i<RAMP.length;i++)brk.push(ts.length?ts[Math.floor(ts.length*i/RAMP.length)]:i);
+  function col(t){for(let i=0;i<brk.length;i++)if(t<=brk[i])return RAMP[i];return RAMP[RAMP.length-1];}
+  $('#espFoot').textContent=`${fmt(D2.length)} hexágonos de ~860 m con población (Censo 2024) y ≥2 siniestros · color = siniestros por 1.000 habitantes: el rojo marca riesgo desproporcionado a su población, no solo alto volumen.`;
+  legendRiesgo(brk);
+  return new deck.PolygonLayer({id:'riesgo',data:D2,pickable:true,stroked:true,filled:true,extruded:false,
+    getPolygon:h=>h[0],getFillColor:h=>[...col(h[3]),190],getLineColor:[255,255,255,55],lineWidthUnits:'pixels',getLineWidth:0.5,
+    onHover:i=>hover(i,h=>`Tasa ${fmt1(h[3])}/1.000 hab · ${fmt(h[1])} siniestros · ${fmt(h[2])} hab`+(h[4]>0?` · ${fmt(h[4])} fallecidos`:''))});}
+function legendRiesgo(brk){let h='<span style="margin-right:4px">Siniestros / 1.000 hab:</span><span>0</span>';for(let i=0;i<RAMP.length;i++)h+=`<i style="width:20px;height:12px;display:inline-block;background:rgb(${RAMP[i].join(',')})"></i>`;h+=`<span>${fmt1(brk[brk.length-1])}+</span>`;$('#espLegend').innerHTML=h;}
 
 function buildCluster(pts){const key=pts.length+'|'+state.region+'|'+[...state.anios].join()+'|'+state.zona+'|'+state.modo+'|'+ESP.metric;
   if(key!==superKey){superKey=key;superIdx=new Supercluster({radius:60,maxZoom:16,map:p=>({f:p.f}),reduce:(a,b)=>{a.f+=b.f;}});
@@ -803,23 +802,23 @@ function fitEspView(){let vs=Object.assign({},espView);const b=scopeBounds();
 function setEspDesc(){$('#espDesc').textContent=({hex:'Grillas hexagonales H3 con extrusión 3D: la altura codifica la magnitud exacta; arrastra con botón derecho para inclinar la cámara. La resolución se adapta al zoom.',
   contour:'Isolíneas de densidad (KDE en bandas discretas): anillos que delimitan umbrales de concentración, sin la difuminación del mapa de calor.',
   red:'Segmentación sobre la red vial real: cada tramo se colorea por sus siniestros o fallecidos, ligando el análisis a la infraestructura.',
-  bivar:'Mapa bivariado de riesgo: cruza exposición (población) con frecuencia de siniestros para revelar dónde el peligro es desproporcionado.',
+  riesgo:'Riesgo hexagonal: siniestros ÷ población (Censo 2024) por hexágono de ~860 m. Revela dónde el peligro es alto para la gente que ahí vive, con detalle fino que la comuna esconde.',
   cluster:'Clústeres dinámicos: burbujas con conteo a escala macro que se desagregan en puntos individuales por modo al hacer zoom.'})[ESP.mode];}
 let lastEspScope='__';
 function renderEspacial(keepView){
   if(!deckgl)initDeck();
   const scopeKey=state.region+'|'+state.comuna+'|'+state.metro,scopeChanged=scopeKey!==lastEspScope;lastEspScope=scopeKey;
   if(!keepView||scopeChanged)fitEspView();
-  const needScope=['hex','contour','cluster','red'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null||state.metro!=null;
+  const needScope=['hex','contour','cluster','red','riesgo'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null||state.metro!=null;
   setEspDesc();
   if(needScope&&!scoped){$('#deckPrompt').style.display='flex';$('#espFoot').textContent='';$('#espLegend').innerHTML='';deckgl.setProps({layers:[basemapLayer()]});return;}
   $('#deckPrompt').style.display='none';
-  if(ESP.mode==='bivar'){deckgl.setProps({viewState:espView,layers:[basemapLayer(),buildBivar()]});return;}
   deckgl.setProps({viewState:espView,layers:[basemapLayer()]});   // base mientras cargan los datos del territorio
   ensureScope().then(()=>{if(currentView!=='espacial')return;
     let dl;
     if(ESP.mode==='hex')dl=[buildHex(espFiltered())];
     else if(ESP.mode==='contour')dl=[buildContour(espFiltered())];
+    else if(ESP.mode==='riesgo')dl=[buildRiesgo()];
     else if(ESP.mode==='red')dl=[buildRed()];
     else dl=buildCluster(espFiltered());
     deckgl.setProps({viewState:espView,layers:[basemapLayer(),...dl]});});
