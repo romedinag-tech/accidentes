@@ -1,0 +1,142 @@
+{
+  "temas": [
+    {
+      "tema": "Puntos críticos",
+      "slug": "puntos_criticos",
+      "capas": 11,
+      "filas": 382001,
+      "mb": 18.73
+    },
+    {
+      "tema": "Atropellos",
+      "slug": "atropellos",
+      "capas": 11,
+      "filas": 43724,
+      "mb": 4.27
+    },
+    {
+      "tema": "Siniestros individuales",
+      "slug": "siniestros_individuales",
+      "capas": 88,
+      "filas": 544561,
+      "mb": 37.4
+    },
+    {
+      "tema": "Siniestros en ruta",
+      "slug": "siniestros_en_ruta",
+      "capas": 5,
+      "filas": 78624,
+      "mb": 4.51
+    },
+    {
+      "tema": "Motocicletas",
+      "slug": "motocicletas",
+      "capas": 5,
+      "filas": 34414,
+      "mb": 3.66
+    },
+    {
+      "tema": "Bicicletas",
+      "slug": "bicicletas",
+      "capas": 5,
+      "filas": 13366,
+      "mb": 1.6
+    },
+    {
+      "tema": "Siniestros urbanos",
+      "slug": "siniestros_urbanos",
+      "capas": 15,
+      "filas": 56932,
+      "mb": 4.26
+    },
+    {
+      "tema": "Región multianual",
+      "slug": "region_multianual",
+      "capas": 22,
+      "filas": 59446,
+      "mb": 3.74
+    }
+  ],
+  "cartografia": [
+    {
+      "slug": "comunas",
+      "filas": 345,
+      "mb": 8.09,
+      "cols": [
+        "cut_com",
+        "comuna",
+        "cut_prov",
+        "provincia",
+        "cod_region",
+        "region_norm",
+        "region_nombre",
+        "poblacion",
+        "pob_hombres",
+        "pob_mujeres",
+        "viviendas",
+        "superficie_km2",
+        "densidad_hab_km2",
+        "geometry"
+      ]
+    },
+    {
+      "slug": "regiones",
+      "filas": 16,
+      "mb": 6.7,
+      "cols": [
+        "cod_region",
+        "region_norm",
+        "region_nombre",
+        "poblacion",
+        "superficie_km2",
+        "densidad_hab_km2",
+        "geometry"
+      ]
+    },
+    {
+      "slug": "provincias",
+      "filas": 56,
+      "mb": 7.15,
+      "cols": [
+        "objectid",
+        "cod_region",
+        "region_nombre",
+        "cut_prov",
+        "provincia",
+        "t_hom_r",
+        "t_muj_r",
+        "t_pob_r",
+        "t_hom_u",
+        "t_muj_u",
+        "t_pob_u",
+        "t_hom",
+        "t_muj",
+        "poblacion",
+        "t_viv_u",
+        "t_viv_r",
+        "t_viv",
+        "superficie",
+        "densidad",
+        "shape_leng",
+        "shape_are",
+        "shape_len",
+        "geometry"
+      ]
+    },
+    {
+      "slug": "red_vial",
+      "filas": 316246,
+      "mb": 50.18,
+      "cols": [
+        "fid",
+        "type",
+        "nombre",
+        "comuna",
+        "nombre_reg",
+        "nombre_com",
+        "shape_len",
+        "geometry"
+      ]
+    }
+  ]
+}

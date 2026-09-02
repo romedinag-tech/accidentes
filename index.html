@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siniestros de Tránsito en Chile — Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<style>
+  :root{
+    --bg:#0f1420; --card:#1a2130; --card2:#212a3b; --text:#e8edf5; --muted:#8b98ad;
+    --accent:#5b9dff; --accent2:#43d9a3; --warn:#f5a623; --danger:#ff6b6b; --border:#2a3448;
+    --shadow:0 2px 12px rgba(0,0,0,.25);
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f6fb; --card:#ffffff; --card2:#f0f3f9; --text:#1a2233; --muted:#63708a;
+    --accent:#2f6fed; --accent2:#12a97a; --warn:#d98200; --danger:#e03e3e; --border:#dde3ee;
+    --shadow:0 2px 12px rgba(20,40,80,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1500px;margin:0 auto;padding:22px 26px 60px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  h1{font-size:23px;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin:4px 0 0;max-width:820px}
+  .tbtn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:10px;
+        padding:8px 12px;cursor:pointer;font-size:13px}
+  .filters{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin:18px 0 20px;
+           background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
+  .fg{display:flex;flex-direction:column;gap:6px}
+  .fg label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:999px;
+        padding:5px 12px;cursor:pointer;font-size:13px;user-select:none;transition:.15s}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  select{background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:9px;
+         padding:8px 10px;font-size:13px;min-width:150px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px 17px;box-shadow:var(--shadow)}
+  .kpi .n{font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .kpi .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .kpi .d{font-size:12px;color:var(--muted);margin-top:3px}
+  .grid{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin-bottom:18px}
+  @media(max-width:1050px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .card h2{font-size:14px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .card h2 .hint{font-weight:400;font-size:11px;color:var(--muted)}
+  #map{height:520px;border-radius:10px;overflow:hidden}
+  .maprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .seg{display:flex;background:var(--card2);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .seg button{background:none;border:none;color:var(--muted);padding:6px 11px;cursor:pointer;font-size:12px}
+  .seg button.on{background:var(--accent);color:#fff}
+  .legend{display:flex;gap:2px;align-items:center;font-size:11px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+  .legend i{width:22px;height:11px;display:inline-block;border-radius:2px}
+  .chartbox{position:relative;height:230px}
+  .chartbox.sm{height:200px}
+  .charts2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.charts2{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .leaflet-tooltip{background:var(--card);border:1px solid var(--border);color:var(--text);box-shadow:var(--shadow);font-size:12px}
+  .leaflet-tooltip.tt strong{color:var(--accent)}
+  footer{color:var(--muted);font-size:12px;margin-top:26px;border-top:1px solid var(--border);padding-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--accent)}
+  .note{background:var(--card2);border-left:3px solid var(--warn);border-radius:8px;padding:10px 13px;font-size:12.5px;color:var(--muted);margin-bottom:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Siniestros de Tránsito en Chile</h1>
+      <p class="sub" id="sub"></p>
+    </div>
+    <button class="tbtn" id="theme">◐ Tema</button>
+  </header>
+
+  <div class="note" id="note"></div>
+
+  <div class="filters">
+    <div class="fg"><label>Años</label><div class="chips" id="fAnios"></div></div>
+    <div class="fg"><label>Región</label><select id="fRegion"></select></div>
+    <div class="fg"><label>Comuna / ciudad</label><select id="fComuna"></select></div>
+    <div class="fg"><label>Tipo de siniestro</label><select id="fTipo"></select></div>
+    <div class="fg"><label>Zona</label><select id="fZona"></select></div>
+    <div class="fg"><label>&nbsp;</label><button class="tbtn" id="reset">Limpiar filtros</button></div>
+  </div>
+  <div id="breadcrumb" style="margin:-8px 0 16px;font-size:13px;color:var(--muted)"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Mapa <span class="hint" id="mapHint"></span></h2>
+      <div class="maprow">
+        <div class="seg" id="mapMode">
+          <button data-mode="choropleth" class="on">Comunas</button>
+          <button data-mode="heat">Concentración (calor)</button>
+        </div>
+        <div class="seg" id="mapMetric">
+          <button data-m="s" class="on">Siniestros</button>
+          <button data-m="m">Fallecidos</button>
+          <button data-m="tasa">Tasa/100k</button>
+          <button data-m="g">Graves</button>
+        </div>
+      </div>
+      <div id="map"></div>
+      <div class="legend" id="legend"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px" id="mapFoot"></div>
+    </div>
+    <div class="card">
+      <h2 id="anioTitle">Evolución anual por tipo</h2>
+      <div class="chartbox"><canvas id="cAnio"></canvas></div>
+      <h2 style="margin-top:16px">Siniestros por región</h2>
+      <div class="chartbox" style="height:300px"><canvas id="cRegion"></canvas></div>
+    </div>
+  </div>
+
+  <div class="charts2" style="margin-bottom:18px">
+    <div class="card"><h2>Por tipo de siniestro</h2><div class="chartbox sm"><canvas id="cTipo"></canvas></div></div>
+    <div class="card"><h2>Por causa <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cCausa"></canvas></div></div>
+  </div>
+
+  <div class="charts2" style="margin-bottom:18px">
+    <div class="card"><h2>Por mes <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cMes"></canvas></div></div>
+    <div class="card"><h2>Por hora del día <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cHora"></canvas></div></div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h2>Por día de la semana <span class="hint">(no filtra por tipo)</span></h2><div class="chartbox sm"><canvas id="cDia"></canvas></div></div>
+    <div class="card">
+      <h2>Top comunas <span class="hint" id="topHint"></span></h2>
+      <div style="max-height:300px;overflow:auto"><table id="tTop"></table></div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="foot"></span>
+    <span>Datos: <a href="https://mapas-conaset.opendata.arcgis.com" target="_blank" rel="noopener">CONASET</a> · Cartografía DPA Censal · WGS84</span>
+  </footer>
+</div>
+
+<script src="data_bundle.js?v=1"></script>
+<script>
+const D = window.DATA, M = D.meta;
+const $ = s => document.querySelector(s);
+const fmt = n => (n==null||isNaN(n)) ? '–' : Math.round(n).toLocaleString('es-CL');
+const fmt1 = n => (n==null||isNaN(n)) ? '–' : n.toLocaleString('es-CL',{maximumFractionDigits:1});
+const regName = c => (M.regiones.find(r=>r.cod===c)||{}).nombre || '—';
+const regPob  = c => (M.regiones.find(r=>r.cod===c)||{}).poblacion || 0;
+
+const state = { anios:new Set(M.anios), region:null, comuna:null, tipo:null, zona:null, metric:'s', mapMode:'choropleth' };
+const comunasByCod = {}; D.comunas.forEach((c,i)=>{ (comunasByCod[c.cod]=comunasByCod[c.cod]||[]).push(i); });
+
+/* ---------- Filtros UI ---------- */
+const fAnios = $('#fAnios');
+M.anios.forEach(a=>{ const c=document.createElement('span'); c.className='chip on'; c.textContent=a;
+  c.onclick=()=>{ if(state.anios.has(a)){ if(state.anios.size>1) state.anios.delete(a);} else state.anios.add(a);
+    c.classList.toggle('on', state.anios.has(a)); render(); }; fAnios.appendChild(c); });
+const fRegion=$('#fRegion'); fRegion.innerHTML='<option value="">Todas las regiones</option>'+
+  M.regiones.map(r=>`<option value="${r.cod}">${r.nombre}</option>`).join('');
+fRegion.onchange=()=>{ state.region=fRegion.value?+fRegion.value:null; state.comuna=null; fillComunas(); render(); };
+const fComuna=$('#fComuna');
+function fillComunas(){
+  const list = state.region!=null ? (comunasByCod[state.region]||[]) : D.comunas.map((_,i)=>i);
+  const opts = list.map(i=>({i,n:D.comunas[i].nombre})).sort((a,b)=>a.n.localeCompare(b.n));
+  fComuna.innerHTML='<option value="">Todas</option>'+opts.map(o=>`<option value="${o.i}">${o.n}</option>`).join('');
+  fComuna.value = state.comuna!=null ? state.comuna : '';
+}
+fComuna.onchange=()=>{ selectComuna(fComuna.value!==''?+fComuna.value:null); };
+function selectComuna(ci){
+  state.comuna=ci;
+  if(ci!=null){ state.region=D.comunas[ci].cod; fRegion.value=state.region; fillComunas(); fComuna.value=ci;
+    state.mapMode='heat'; }               // al elegir ciudad -> ver zonas de concentración
+  else { state.mapMode='choropleth'; fComuna.value=''; }
+  syncModeBtns(); render();
+}
+function syncModeBtns(){ $('#mapMode').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.mode===state.mapMode)); }
+const fTipo=$('#fTipo'); fTipo.innerHTML='<option value="">Todos los tipos</option>'+
+  M.tipos.map((t,i)=>`<option value="${i}">${cap(t)}</option>`).join('');
+fTipo.onchange=()=>{ state.tipo=fTipo.value?+fTipo.value:null; render(); };
+const fZona=$('#fZona'); fZona.innerHTML='<option value="">Todas las zonas</option><option value="0">Urbana</option><option value="1">Rural</option>';
+fZona.onchange=()=>{ state.zona=fZona.value?+fZona.value:null; render(); };
+$('#reset').onclick=()=>{ state.anios=new Set(M.anios); state.region=null; state.comuna=null; state.tipo=null; state.zona=null;
+  [...fAnios.children].forEach(c=>c.classList.add('on')); fRegion.value=''; fTipo.value=''; fZona.value=''; fillComunas(); render(); };
+
+function cap(s){ return s.charAt(0)+s.slice(1).toLowerCase(); }
+const zonaOk = z => state.zona==null || z===state.zona;
+const anioOk = a => state.anios.has(a);
+
+/* ---------- Agregación desde factGeo ---------- */
+function aggGeo(){
+  const porComuna=new Map(), porRegion=new Map(), porTipo=new Array(M.tipos.length).fill(0);
+  const porAnio=new Map(), porAnioTipo=new Map(); let T={s:0,m:0,g:0,mg:0,l:0};
+  for(const row of D.factGeo){
+    const [ci,an,ti,zo,s,m,g,mg,l]=row;
+    if(!anioOk(an)||!zonaOk(zo)) continue;
+    if(state.tipo!=null && ti!==state.tipo) continue;
+    if(state.comuna!=null && ci!==state.comuna) continue;
+    const com=D.comunas[ci];
+    if(state.region!=null && com.cod!==state.region) continue;
+    T.s+=s;T.m+=m;T.g+=g;T.mg+=mg;T.l+=l;
+    porTipo[ti]+=s;
+    let pc=porComuna.get(ci); if(!pc){pc={s:0,m:0,g:0,mg:0,l:0};porComuna.set(ci,pc);}
+    pc.s+=s;pc.m+=m;pc.g+=g;pc.mg+=mg;pc.l+=l;
+    let pr=porRegion.get(com.cod)||{s:0,m:0}; pr.s+=s;pr.m+=m; porRegion.set(com.cod,pr);
+    let pa=porAnio.get(an)||{s:0,m:0}; pa.s+=s;pa.m+=m; porAnio.set(an,pa);
+    let at=porAnioTipo.get(an); if(!at){at=new Array(M.tipos.length).fill(0);porAnioTipo.set(an,at);}
+    at[ti]+=s;
+  }
+  return {porComuna,porRegion,porTipo,porAnio,porAnioTipo,T};
+}
+/* Agregación temporal (factMes/Hora/Dia) y causa: filtran año, región, zona (no tipo) */
+function aggDim(fact, size){
+  const arr=new Array(size).fill(0), arrM=new Array(size).fill(0);
+  for(const [cod,an,d,zo,s,m] of fact){
+    if(!anioOk(an)||!zonaOk(zo)) continue;
+    if(state.region!=null && cod!==state.region) continue;
+    arr[d]+=s; arrM[d]+=m;
+  }
+  return {s:arr,m:arrM};
+}
+function aggCausa(){
+  const s=new Array(M.causas.length).fill(0);
+  for(const [cod,an,ci,zo,sv] of D.factCausa){
+    if(!anioOk(an)||!zonaOk(zo)) continue;
+    if(state.region!=null && cod!==state.region) continue;
+    s[ci]+=sv;
+  }
+  return s;
+}
+
+/* ---------- KPIs ---------- */
+function renderKpis(A){
+  const pob = state.comuna!=null ? D.comunas[state.comuna].pob
+            : state.region!=null ? regPob(state.region) : M.regiones.reduce((a,r)=>a+r.poblacion,0);
+  const tasa = pob? A.T.m/pob*100000 : null;
+  const ambito = state.comuna!=null ? D.comunas[state.comuna].nombre
+               : state.region!=null ? regName(state.region).replace('Región ','') : 'país';
+  // 6ª KPI: si hay comuna, muestra población; si no, la comuna con más fallecidos
+  let last;
+  if(state.comuna!=null){ last=['Población (Censo 2017)', fmt(pob), 'habitantes']; }
+  else { let topC='—',topV=-1; for(const [ci,v] of A.porComuna) if(v.m>topV){topV=v.m;topC=D.comunas[ci].nombre;}
+    last=['Comuna + fallecidos', topC, fmt(topV)+' fallecidos']; }
+  const kpis=[
+    ['Siniestros', fmt(A.T.s), state.anios.size+' año(s) · '+ambito],
+    ['Fallecidos', fmt(A.T.m), 'personas'],
+    ['Lesionados graves', fmt(A.T.g), 'graves'],
+    ['Lesionados (total)', fmt(A.T.g+A.T.mg+A.T.l), 'graves+menos graves+leves'],
+    ['Tasa fallecidos', fmt1(tasa), 'por 100 mil hab.'],
+    last,
+  ];
+  $('#kpis').innerHTML = kpis.map(k=>`<div class="kpi"><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
+}
+
+/* ---------- Charts ---------- */
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+Chart.defaults.font.family="-apple-system,Segoe UI,Roboto,sans-serif";
+let charts={};
+function baseOpts(){ const grid=css('--border'), tick=css('--muted');
+  return {responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y??c.parsed.x)}}},
+    scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{grid:{color:grid},ticks:{color:tick},beginAtZero:true}}};
+}
+function mkChart(id,cfg){ if(charts[id]) charts[id].destroy(); charts[id]=new Chart($('#'+id),cfg); }
+
+function renderCharts(A){
+  const acc=css('--accent'), acc2=css('--accent2'), dgr=css('--danger');
+  // Evolución anual APILADA por tipo (+ línea de fallecidos)
+  const anios=M.anios;
+  const tsel = state.tipo!=null ? [state.tipo] : M.tipos.map((_,i)=>i);
+  const tipoDS = tsel.map(ti=>({label:cap(M.tipos[ti]),data:anios.map(a=>(A.porAnioTipo.get(a)||[])[ti]||0),
+    backgroundColor:PAL_T[ti%PAL_T.length],borderRadius:3,stack:'sin',yAxisID:'y'}));
+  const mA=anios.map(a=>(A.porAnio.get(a)||{}).m||0);
+  mkChart('cAnio',{type:'bar',data:{labels:anios,datasets:[...tipoDS,
+    {type:'line',label:'Fallecidos',data:mA,borderColor:dgr,backgroundColor:dgr,tension:.3,yAxisID:'y1',stack:'f'}]},
+    options:{...baseOpts(),plugins:{legend:{display:true,position:'bottom',labels:{color:css('--muted'),boxWidth:11,font:{size:10}}}},
+      scales:{x:{stacked:true,grid:{color:css('--border')},ticks:{color:css('--muted')}},
+        y:{stacked:true,position:'left',grid:{color:css('--border')},ticks:{color:css('--muted')},beginAtZero:true},
+        y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
+  // por región (horizontal)
+  const regs=M.regiones.slice().sort((a,b)=>((A.porRegion.get(b.cod)||{}).s||0)-((A.porRegion.get(a.cod)||{}).s||0));
+  mkChart('cRegion',{type:'bar',data:{labels:regs.map(r=>r.nombre.replace('Región ','')),
+    datasets:[{label:'Siniestros',data:regs.map(r=>(A.porRegion.get(r.cod)||{}).s||0),backgroundColor:acc,borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y'}});
+  // por tipo
+  const ti=M.tipos.map((t,i)=>[cap(t),A.porTipo[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  mkChart('cTipo',{type:'bar',data:{labels:ti.map(x=>x[0]),datasets:[{label:'Siniestros',data:ti.map(x=>x[1]),backgroundColor:acc2,borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y'}});
+  // por causa
+  const cs=aggCausa(), ci=M.causas.map((c,i)=>[cap(c),cs[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkChart('cCausa',{type:'bar',data:{labels:ci.map(x=>x[0]),datasets:[{label:'Siniestros',data:ci.map(x=>x[1]),backgroundColor:css('--warn'),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y'}});
+  // mes
+  const mes=aggDim(D.factMes,13); const ML=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  mkChart('cMes',{type:'bar',data:{labels:ML.slice(1),datasets:[{label:'Siniestros',data:mes.s.slice(1),backgroundColor:acc,borderRadius:4}]},options:baseOpts()});
+  // hora
+  const hora=aggDim(D.factHora,24);
+  mkChart('cHora',{type:'bar',data:{labels:[...Array(24).keys()].map(h=>h+'h'),datasets:[{label:'Siniestros',data:hora.s,backgroundColor:acc,borderRadius:3}]},options:baseOpts()});
+  // dia
+  const dia=aggDim(D.factDia,8);
+  mkChart('cDia',{type:'bar',data:{labels:M.dias,datasets:[{label:'Siniestros',data:M.dias.map((_,i)=>dia.s[i+1]),backgroundColor:acc2,borderRadius:4},
+    {type:'line',label:'Fallecidos',data:M.dias.map((_,i)=>dia.m[i+1]),borderColor:dgr,backgroundColor:dgr,tension:.3,yAxisID:'y1'}]},
+    options:{...baseOpts(),scales:{x:{grid:{color:css('--border')},ticks:{color:css('--muted')}},y:{beginAtZero:true,grid:{color:css('--border')},ticks:{color:css('--muted')}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
+}
+
+/* ---------- Tabla top comunas ---------- */
+function renderTop(A){
+  const rows=[...A.porComuna.entries()].map(([ci,v])=>({c:D.comunas[ci],v}))
+    .sort((a,b)=>b.v.s-a.v.s).slice(0,15);
+  $('#tTop').innerHTML='<tr><th>Comuna</th><th>Región</th><th class="num">Siniestros</th><th class="num">Fallec.</th><th class="num">Tasa/100k</th></tr>'+
+    rows.map(r=>{const t=r.c.pob?r.v.m/r.c.pob*100000:null;
+      return `<tr><td>${r.c.nombre}</td><td>${regName(r.c.cod).replace('Región ','')}</td><td class="num">${fmt(r.v.s)}</td><td class="num">${fmt(r.v.m)}</td><td class="num">${fmt1(t)}</td></tr>`;}).join('');
+}
+
+/* ---------- Mapa ---------- */
+let map, comunaLayer, regionLayer, heatLayer, curAgg, lastRegion=null, lastComuna=null;
+const PAL=['#ffffcc','#ffeda0','#fed976','#feb24c','#fd8d3c','#fc4e2a','#e31a1c','#b10026'];
+const PAL_T=['#5b9dff','#43d9a3','#f5a623','#ff6b6b','#b988f5','#54c6d6','#f57eb0'];
+function metricVal(v,cut){
+  if(!v) return 0;
+  if(state.metric==='tasa'){const com=comunaByCut(cut); const p=com?com.pob:0; return p?v.m/p*100000:0;}
+  return v[state.metric]||0;
+}
+const comIdxByCut={}; D.comunas.forEach((c,i)=>comIdxByCut[c.cut]=i);
+function comunaByCut(cut){const i=comIdxByCut[cut];return i==null?null:D.comunas[i];}
+let breaks=[];
+function computeBreaks(A){
+  const vals=[]; for(const [ci,v] of A.porComuna){ const cut=D.comunas[ci].cut; const x=metricVal(v,cut); if(x>0) vals.push(x);}
+  vals.sort((a,b)=>a-b); breaks=[];
+  for(let i=1;i<=7;i++) breaks.push(vals.length?vals[Math.floor(vals.length*i/8)]:0);
+}
+function colorFor(x){ if(!x) return css('--card2'); for(let i=0;i<breaks.length;i++) if(x<=breaks[i]) return PAL[i]; return PAL[7]; }
+function initMap(){
+  map=L.map('map',{zoomControl:true,attributionControl:false,preferCanvas:true}).setView([-38,-71.5],4);
+  regionLayer=L.geoJSON(D.geoRegiones,{style:{color:css('--muted'),weight:1,fill:false,opacity:.5}}).addTo(map);
+  comunaLayer=L.geoJSON(D.geoComunas,{style:featStyle,onEachFeature:(f,l)=>{
+    l.on('mouseover',()=>{ if(state.mapMode==='choropleth') l.setStyle({weight:2,color:css('--accent')}); });
+    l.on('mouseout',()=>comunaLayer.resetStyle(l));
+    l.on('click',()=>{ const ci=comIdxByCut[f.properties.cut_com];
+      selectComuna(ci===state.comuna?null:ci); });
+    l.bindTooltip(()=>tipText(f.properties.cut_com),{className:'tt',sticky:true});
+  }}).addTo(map);
+}
+function buildHeat(A){
+  // gridHot filtrado por comuna/región seleccionada; peso por métrica activa
+  const useM = state.metric==='m';
+  const pts=[]; let maxw=0;
+  for(const [la,lo,ci,s,m] of D.gridHot){
+    if(state.comuna!=null){ if(ci!==state.comuna) continue; }
+    else if(state.region!=null){ if(D.comunas[ci].cod!==state.region) continue; }
+    const w=useM?m:s; if(w<=0) continue; if(w>maxw) maxw=w; pts.push([la,lo,w]);
+  }
+  return {pts,maxw};
+}
+function renderHeat(A){
+  if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; }
+  const {pts,maxw}=buildHeat(A);
+  const grad={0.2:'#2b83ba',0.4:'#abdda4',0.6:'#ffffbf',0.8:'#fdae61',1.0:'#d7191c'};
+  heatLayer=L.heatLayer(pts,{radius:18,blur:15,maxZoom:15,max:Math.max(1,maxw*0.6),gradient:grad}).addTo(map);
+  $('#mapFoot').textContent = `${fmt(pts.length)} celdas (~330 m) · acumulado ${M.anios[0]}–${M.anios[M.anios.length-1]} · sin filtro de tipo`;
+}
+function featStyle(f){ const cut=f.properties.cut_com; const i=comIdxByCut[cut];
+  const v=curAgg?curAgg.porComuna.get(i):null; return {fillColor:colorFor(metricVal(v,cut)),weight:.4,color:'#77839a',fillOpacity:.82}; }
+function tipText(cut){ const i=comIdxByCut[cut]; const com=D.comunas[i]; const v=curAgg&&curAgg.porComuna.get(i);
+  const t=(com&&com.pob&&v)?v.m/com.pob*100000:null;
+  return `<strong>${com?com.nombre:cut}</strong><br>${com?regName(com.cod).replace('Región ',''):''}`+
+    (v?`<br>Siniestros: <b>${fmt(v.s)}</b><br>Fallecidos: <b>${fmt(v.m)}</b><br>Tasa: ${fmt1(t)}/100k`:'<br><i>sin datos</i>'); }
+function renderMap(A){ curAgg=A; computeBreaks(A);
+  const heat = state.mapMode==='heat';
+  // capa coropleta
+  if(heat){ comunaLayer.setStyle({fillOpacity:0,weight:.4,color:'#77839a'}); renderHeat(A); }
+  else { if(heatLayer){ map.removeLayer(heatLayer); heatLayer=null; } comunaLayer.setStyle(featStyle); $('#mapFoot').textContent=''; }
+  // leyenda
+  if(heat){ $('#legend').innerHTML='<span>menos</span>'+['#2b83ba','#abdda4','#ffffbf','#fdae61','#d7191c'].map(c=>`<i style="background:${c}"></i>`).join('')+'<span>más</span><span style="margin-left:8px">· densidad de '+(state.metric==='m'?'fallecidos':'siniestros')+'</span>'; }
+  else $('#legend').innerHTML='<span>menos</span>'+PAL.map((c,i)=>`<i style="background:${c}"></i>`).join('')+'<span>más</span>'+
+    `<span style="margin-left:8px">· ${({s:'siniestros',m:'fallecidos',g:'graves',tasa:'fallecidos/100k hab.'})[state.metric]}</span>`;
+  // zoom cuando cambia comuna o región
+  if(state.comuna!==lastComuna || state.region!==lastRegion){
+    lastComuna=state.comuna; lastRegion=state.region;
+    let gj=null;
+    if(state.comuna!=null) gj=D.geoComunas.features.find(f=>comIdxByCut[f.properties.cut_com]===state.comuna);
+    else if(state.region!=null) gj=D.geoRegiones.features.find(f=>f.properties.cod_region===state.region);
+    if(gj){ try{ map.fitBounds(L.geoJSON(gj).getBounds(),{padding:[12,12],animate:false}); }catch(e){} }
+    else map.setView([-38,-71.5],4,{animate:false});
+  }
+}
+$('#mapMetric').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  $('#mapMetric').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state.metric=b.dataset.m; renderMap(curAgg); });
+$('#mapMode').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  $('#mapMode').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); state.mapMode=b.dataset.mode; renderMap(curAgg); });
+
+/* ---------- Render maestro ---------- */
+function renderBreadcrumb(){
+  const bc=$('#breadcrumb'); const parts=[];
+  parts.push('<b>Chile</b>');
+  if(state.region!=null) parts.push(`<span style="cursor:pointer;color:var(--accent)" onclick="clearComuna()">${regName(state.region).replace('Región ','')}</span>`);
+  if(state.comuna!=null) parts.push(`<b>${D.comunas[state.comuna].nombre}</b> <span style="cursor:pointer" title="quitar" onclick="clearComuna()">✕</span>`);
+  bc.innerHTML = parts.join(' › ') + (state.comuna!=null?'  — viendo tendencia y zonas de esta comuna':'  — clic en una comuna del mapa para ver su tendencia y zonas');
+}
+window.clearComuna=()=>{ selectComuna(null); };
+function render(){
+  const A=aggGeo();
+  renderKpis(A); renderCharts(A); renderTop(A); renderMap(A); renderBreadcrumb();
+  const amb = state.comuna!=null?D.comunas[state.comuna].nombre : state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
+  $('#mapHint').textContent = amb;
+  $('#anioTitle').textContent = 'Evolución anual por tipo — '+amb;
+  $('#topHint').textContent = 'por siniestros';
+}
+
+/* ---------- Init ---------- */
+$('#sub').textContent = `${fmt(D.factGeo.reduce((a,r)=>a+r[4],0))} siniestros georreferenciados · ${M.anios[0]}–${M.anios[M.anios.length-1]} · deduplicados`;
+$('#note').textContent = M.nota;
+$('#foot').textContent = `build ${M.generado} · fuente ${M.fuente}`;
+const theme=$('#theme'); const saved=localStorage.getItem('theme-acc');
+if(saved) document.documentElement.setAttribute('data-theme',saved);
+theme.onclick=()=>{ const cur=document.documentElement.getAttribute('data-theme')==='light'?'':'light';
+  if(cur) document.documentElement.setAttribute('data-theme',cur); else document.documentElement.removeAttribute('data-theme');
+  localStorage.setItem('theme-acc',cur); render(); if(map){regionLayer.setStyle({color:css('--muted')});} };
+fillComunas();
+initMap();
+render();
+setTimeout(()=>{map.invalidateSize();renderMap(curAgg);},200);
+</script>
+</body>
+</html>

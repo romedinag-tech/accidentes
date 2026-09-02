@@ -1,0 +1,15 @@
+# Datos pesados y crudos — fuera del repo (regenerables con los scripts).
+# El dashboard es autocontenido: index.html + data_bundle.js bastan para publicar.
+data/CONASET/
+data/Cartografia_base/
+data/parquet/*.parquet
+data/parquet/cartografia/*.parquet
+data/accidentes.duckdb
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Config local de Claude Code
+.claude/
