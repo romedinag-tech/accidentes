@@ -481,26 +481,41 @@ function freqTxt(count,days){ if(!count||count<=0||days<=0) return null;
   const perDay=count/days;
   if(perDay>=1.4) return {perDay:true,val:Math.round(perDay)};
   return {perDay:false,val:Math.max(1,Math.round(days/count))}; }
+// modificador del sustantivo "siniestros" según el modo filtrado
+function modoMod(i){const m=(M.modos[i]||'').toLowerCase();
+  if(m.includes('peat')||m.includes('atrop')) return 'de atropello';
+  if(m.includes('moto')) return 'con moto involucrada';
+  if(m.includes('bici')) return 'con bicicleta involucrada';
+  return 'solo entre vehículos';}
 function renderFrase(A){
   const el=$('#kpiFrase'); if(!el) return;
+  el.style.display='flex';                                   // nunca desaparece en la vista Siniestros
+  const ico='<svg class="ic"><use href="#i-pulse"/></svg>';
+  const lug=scopeName(), en=lug==='todo Chile'?'todo Chile':lug;
+  // filtros activos como modificadores de "siniestros", para que la frase no engañe
+  const mods=[];
+  if(state.modo!=null) mods.push(modoMod(state.modo));
+  if(state.zona!=null) mods.push('en zona '+(state.zona===0?'urbana':'rural'));
+  const sinMod=mods.length?' '+mods.join(' '):'';            // "…con bicicleta involucrada en zona rural"
   const yrs=[...state.anios].map(Number).filter(y=>!isNaN(y));
+  if(!yrs.length){el.innerHTML=`${ico}<span>Selecciona al menos un año para ver la frecuencia.</span>`;return;}
   const days=yrs.reduce((s,y)=>s+((y%4===0&&(y%100!==0||y%400===0))?366:365),0);
   const muertos=A.T.m, sin=A.T.s, lesion=A.T.g+A.T.mg+A.T.l;
-  if(days<=0||sin<=0){el.style.display='none';return;}
-  el.style.display='flex';
-  const lug=scopeName(), en=lug==='todo Chile'?'todo Chile':lug;
+  if(sin<=0){el.innerHTML=`${ico}<span>En <strong>${en}</strong> no se registran siniestros${sinMod} en el período elegido.</span>`;return;}
   const nn=v=>`<span class="n">${fmt(v)}</span>`;
   const fm=freqTxt(muertos,days);
   let f1;
   if(!fm) f1=`no se registran fallecidos`;
-  else if(fm.perDay) f1=`cada día fallecen ${nn(fm.val)} persona${fm.val>1?'s':''}`;
+  else if(fm.perDay) f1=fm.val===1?`cada día fallece ${nn(1)} persona`:`cada día fallecen ${nn(fm.val)} personas`;
   else f1=fm.val===1?`cada día fallece <strong>una persona</strong>`:`cada ${nn(fm.val)} días fallece <strong>una persona</strong>`;
   const le=freqTxt(lesion,days);
   let f2;
   if(!le) f2=`no se registran lesionados`;
-  else if(le.perDay) f2=`cada día resultan lesionadas ${nn(le.val)} persona${le.val>1?'s':''}`;
+  else if(le.perDay) f2=le.val===1?`cada día resulta lesionada ${nn(1)} persona`:`cada día resultan lesionadas ${nn(le.val)} personas`;
   else f2=le.val===1?`cada día hay <strong>al menos un lesionado</strong>`:`cada ${nn(le.val)} días una persona resulta lesionada`;
-  el.innerHTML=`<svg class="ic"><use href="#i-pulse"/></svg><span>En <strong>${en}</strong>, ${f1} en el tránsito, y ${f2}.</span>`;
+  const intro=mods.length?`en siniestros${sinMod}`:'';       // con filtro: "en siniestros …"; sin filtro: nada
+  const tr=mods.length?'':' en el tránsito';                 // "en el tránsito" sobra si ya hay contexto
+  el.innerHTML=`${ico}<span>En <strong>${en}</strong>${intro?', '+intro:''}, ${f1}${tr}, y ${f2}.</span>`;
 }
 
 /* ---------- Charts ---------- */
