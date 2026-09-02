@@ -126,6 +126,17 @@ pts = q(f"""SELECT round(lat,4) la, round(lon,4) lo, anio, cod_region, modo, coa
 PUNTOS = [[r.la, r.lo, int(r.anio) - ANIO_MIN, int(r.cod_region), modo_idx[r.modo], tipo_idx.get(r.tipo, 0),
            int(r.zona), int(r.f), com_idx.get(r.cut_com, -1)]
           for r in pts.itertuples() if r.modo in modo_idx]
+# Los puntos NO se embeben (son ~436k): se escriben por región y se cargan bajo demanda.
+_pdir = os.path.join(BASE, 'data', 'puntos'); os.makedirs(_pdir, exist_ok=True)
+for _f in os.listdir(_pdir):
+    os.remove(os.path.join(_pdir, _f))
+_pby = _col.defaultdict(list)
+for _pt in PUNTOS:
+    _pby[_pt[3]].append(_pt)
+for _cod, _arr in _pby.items():
+    json.dump(_arr, open(os.path.join(_pdir, f'{_cod}.json'), 'w', encoding='utf-8'), separators=(',', ':'))
+PUNTOS_REGIONES = sorted(int(c) for c in _pby)
+print('  puntos por región ->', len(_pby), 'archivos en data/puntos/')
 
 # ---------- Red vial segmentada (linear referencing, precómputo offline) ----------
 RED_VIAL = None
@@ -144,6 +155,16 @@ if os.path.exists(rvpath):
             coords = [[round(x, 4), round(y, 4)] for x, y in ln.coords]
             if len(coords) >= 2:
                 RED_VIAL.append([coords, int(r.n), int(r.f), int(r.cod_region)])
+    # La red vial tampoco se embebe: por región, bajo demanda.
+    _rdir = os.path.join(BASE, 'data', 'redvial'); os.makedirs(_rdir, exist_ok=True)
+    for _f in os.listdir(_rdir):
+        os.remove(os.path.join(_rdir, _f))
+    _rby = _col.defaultdict(list)
+    for _seg in RED_VIAL:
+        _rby[_seg[3]].append(_seg)
+    for _cod, _arr in _rby.items():
+        json.dump(_arr, open(os.path.join(_rdir, f'{_cod}.json'), 'w', encoding='utf-8'), separators=(',', ':'))
+    print('  red vial por región ->', len(_rby), 'archivos en data/redvial/')
 
 # ---------- FASE 2: personas accidentadas (base persona_vehiculo) ----------
 PERS = None
@@ -191,8 +212,8 @@ DATA = {
     'factTipo': FACT_TIPO, 'factCausa': FACT_CAUSA, 'factMes': FACT_MES, 'factHora': FACT_HORA, 'factDia': FACT_DIA,
     'gridHot': GRID_HOT, 'geoComunas': GJ_COMUNAS, 'geoRegiones': GJ_REGIONES,
     'personas': PERS,
-    'puntos': PUNTOS, 'redVial': RED_VIAL,
 }
+DATA['meta']['puntosRegiones'] = PUNTOS_REGIONES
 out = os.path.join(BASE, 'data_bundle.js')
 with open(out, 'w', encoding='utf-8') as f:
     f.write('/* Generado por procesar_accidentes.py — no editar a mano. */\n')

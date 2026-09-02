@@ -117,6 +117,7 @@ select{background:var(--surface-alt);border:1px solid var(--line);color:var(--in
 #map{height:520px;border-radius:10px;overflow:hidden;border:1px solid var(--line);position:relative}
 #mapScope{position:absolute;top:10px;left:10px;z-index:500;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 12px;box-shadow:var(--sh);font-size:.78rem;pointer-events:none;color:var(--ink)}
 #mapScope b{font-size:.9rem}
+.maploading{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:600;background:rgba(10,13,19,.30);color:#fff;font-size:.9rem;font-weight:600;letter-spacing:.02em}
 .maprow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .seg{display:flex;background:var(--surface-alt);border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .seg button{background:none;border:none;color:var(--ink-mid);padding:7px 12px;cursor:pointer;font-size:.8rem;font-weight:600;font-family:var(--font-ui)}
@@ -212,7 +213,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
           <button data-b="satelite">Satélite</button>
         </div>
       </div>
-      <div id="map"><div id="mapScope"></div></div>
+      <div id="map"><div id="mapScope"></div><div id="mapLoading" class="maploading">Cargando datos del territorio…</div></div>
       <div class="legend" id="legend"></div>
       <div class="mapfoot" id="mapFoot"></div>
     </div>
@@ -290,6 +291,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div id="deckMap" style="height:620px;position:relative;background:var(--surface-alt);cursor:grab">
+        <div id="deckLoading" class="maploading">Cargando datos del territorio…</div>
         <div id="deckPrompt" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:6;background:rgba(10,13,19,.28);padding:20px">
           <div style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 22px;box-shadow:var(--sh);max-width:440px;text-align:center">
             <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:6px">Elige una región o ciudad</div>
@@ -308,7 +310,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </footer>
 </div>
 
-<script src="data_bundle.js?v=7"></script>
+<script src="data_bundle.js?v=8"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const $=s=>document.querySelector(s);
@@ -575,8 +577,10 @@ function renderMap(A){curAgg=A;computeBreaks(A);
     comunaLayer.setStyle({fillOpacity:0,weight:.6,color:css('--ink-lo')});
     const scoped=state.region!=null||state.comuna!=null||state.metro!=null;
     if(!scoped){$('#mapFoot').textContent='A nivel país son demasiados puntos. Elige una región o ciudad (arriba) para ver los siniestros uno a uno.';}
-    else{const pts=espFiltered();pointsLayer=new PointsLayer().addTo(map);pointsLayer.setData(pts);
-      $('#mapFoot').textContent=`${fmt(pts.length)} siniestros individuales · color por modo involucrado · los que dejaron fallecidos van resaltados con borde`;}
+    else{ensureScope().then(()=>{if(state.mapMode!=='puntos'||currentView!=='siniestros')return;
+      const pts=espFiltered();if(pointsLayer){map.removeLayer(pointsLayer);}
+      pointsLayer=new PointsLayer().addTo(map);pointsLayer.setData(pts);
+      $('#mapFoot').textContent=`${fmt(pts.length)} siniestros individuales · color por modo involucrado · los que dejaron fallecidos van resaltados con borde`;});}
   }
   else{if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}comunaLayer.setStyle(featStyle);$('#mapFoot').textContent='';}
   renderLegend();
@@ -679,8 +683,23 @@ const RAMP=[[255,255,204],[255,237,160],[254,217,118],[254,178,76],[253,141,60],
 function rampCol(t){t=Math.max(0,Math.min(0.999,t||0));return RAMP[Math.floor(t*RAMP.length)];}
 const maxOf=(arr,f)=>{let m=1;for(const x of arr){const v=f(x);if(v>m)m=v;}return m;};
 const wOf=p=>ESP.metric==='f'?p[7]:1;
+/* ---- Carga por región (lazy): puntos y red vial se cargan solo del territorio elegido ---- */
+let SCOPE_POINTS=[],SCOPE_RED=[],loadedScopeKey='__',loadingScope=false;
+const ptsCache={},redCache={};
+function scopeRegions(){if(state.comuna!=null)return[D.comunas[state.comuna].cod];
+  if(state.metro!=null)return[...new Set(METROS[state.metro].coms.map(ci=>D.comunas[ci].cod))];
+  if(state.region!=null)return[state.region];return[];}
+function _fetchReg(cache,dir,cod){if(cache[cod])return Promise.resolve();
+  return fetch(dir+cod+'.json').then(r=>r.ok?r.json():[]).then(a=>{cache[cod]=a;}).catch(()=>{cache[cod]=[];});}
+function setLoading(on){const a=$('#mapLoading'),b=$('#deckLoading');if(a)a.style.display=on?'flex':'none';if(b)b.style.display=on?'flex':'none';}
+function ensureScope(){const cods=scopeRegions(),key=cods.join(',');
+  if(key===loadedScopeKey)return Promise.resolve();
+  loadingScope=true;setLoading(true);
+  return Promise.all(cods.flatMap(c=>[_fetchReg(ptsCache,'data/puntos/',c),_fetchReg(redCache,'data/redvial/',c)]))
+    .then(()=>{SCOPE_POINTS=cods.flatMap(c=>ptsCache[c]||[]);SCOPE_RED=cods.flatMap(c=>redCache[c]||[]);
+      loadedScopeKey=key;loadingScope=false;setLoading(false);});}
 function espFiltered(){const out=[],y0=M.anios[0];
-  for(const p of D.puntos){if(!anioOk(p[2]+y0)||!zonaOk(p[6])||!modoOk(p[4]))continue;
+  for(const p of SCOPE_POINTS){if(!anioOk(p[2]+y0)||!zonaOk(p[6])||!modoOk(p[4]))continue;
     if(p[8]>=0){if(!inScope(p[8]))continue;}else{if(state.comuna!=null||state.metro!=null)continue;if(state.region!=null&&p[3]!==state.region)continue;}
     out.push(p);}
   return out;}
@@ -691,16 +710,17 @@ function basemapLayer(){return new deck.TileLayer({id:'osm',data:'https://tile.o
     return new deck.BitmapLayer(props,{data:null,image:props.data,bounds:[w,s,e,n]});}});}
 function currentBounds(){try{const b=deckgl.getViewports()[0].getBounds();return Array.isArray(b[0])?[b[0][0],b[0][1],b[1][0],b[1][1]]:b;}catch(e){return[-76,-56,-66,-17];}}
 
-function buildHex(pts){const res=h3res(espView.zoom);lastHexRes=res;const agg=new Map();
-  for(const p of pts){const h=h3.latLngToCell(p[0],p[1],res);let a=agg.get(h);if(!a){a={h:h,c:0,f:0};agg.set(h,a);}a.c++;a.f+=p[7];}
-  const data=[...agg.values()];const mx=maxOf(data,d=>ESP.metric==="f"?d.f:d.c);
-  $('#espFoot').textContent=`${fmt(data.length)} hexágonos H3 (resolución ${res}, adaptativa al zoom) · ${fmt(pts.length)} siniestros · altura ∝ ${ESP.metric==='f'?'fallecidos':'siniestros'}`;
-  legendRamp(mx,ESP.metric==='f'?'fallecidos por hexágono':'siniestros por hexágono');
-  const edge=[22600,22600,22600,22600,22600,8500,3200,1200,460,174][res]||174;
-  return new deck.H3HexagonLayer({id:'hex',data,extruded:true,pickable:true,wireframe:false,
-    getHexagon:d=>d.h,getElevation:d=>(ESP.metric==='f'?d.f:d.c),elevationScale:(3.2*edge)/mx,
-    getFillColor:d=>[...rampCol((ESP.metric==='f'?d.f:d.c)/mx),225],opacity:0.9,material:{ambient:0.65,diffuse:0.55},
-    onHover:i=>hover(i,d=>`${fmt(d.c)} siniestros · ${fmt(d.f)} fallecidos`)});}
+function buildHex(pts){const z=espView.zoom;lastHexRes=Math.round(z);
+  const radius=z<7?2200:z<9?800:z<11?330:z<13?140:70;   // metros, se ajusta al zoom (grilla hexagonal)
+  $('#espFoot').textContent=`Grilla hexagonal de ~${radius} m (se adapta al zoom) · ${fmt(pts.length)} siniestros · altura y color ∝ ${ESP.metric==='f'?'fallecidos':'siniestros'} · arrastra con botón derecho para inclinar la cámara`;
+  $('#espLegend').innerHTML='<span>menos</span>'+RAMP.slice(1).map(c=>`<i style="width:20px;height:12px;display:inline-block;background:rgb(${c.join(',')})"></i>`).join('')+`<span>más</span><span style="margin-left:8px">· ${ESP.metric==='f'?'fallecidos':'siniestros'} por hexágono</span>`;
+  return new deck.HexagonLayer({id:'hex',data:pts,pickable:true,extruded:true,radius,coverage:0.92,
+    getPosition:p=>[p[1],p[0]],
+    getColorWeight:p=>wOf(p),colorAggregation:'SUM',
+    getElevationWeight:p=>wOf(p),elevationAggregation:'SUM',
+    elevationScale:radius*0.06,upperPercentile:99.5,colorRange:RAMP.slice(1).map(c=>[c[0],c[1],c[2]]),
+    material:{ambient:0.64,diffuse:0.6,shininess:28},
+    onHover:i=>hover(i,d=>`${fmt(d.colorValue||d.elevationValue||0)} ${ESP.metric==='f'?'fallecidos':'siniestros'} · ${d.points?d.points.length+' pts':''}`)});}
 
 function buildContour(pts){const z=espView.zoom;const cell=z<6?4000:z<8?1500:z<10?600:z<12?250:120;
   const base=ESP.metric==='f'?1:2;const step=ESP.metric==='f'?2:4;
@@ -710,7 +730,7 @@ function buildContour(pts){const z=espView.zoom;const cell=z<6?4000:z<8?1500:z<1
   return new deck.ContourLayer({id:'contour',data:pts,getPosition:p=>[p[1],p[0]],getWeight:p=>wOf(p),
     cellSize:cell,aggregation:'SUM',contours,gpuAggregation:true});}
 
-function buildRed(){const data=(D.redVial||[]).filter(s=>state.region==null||s[3]===state.region);
+function buildRed(){const data=SCOPE_RED;
   const mx=maxOf(data,s=>ESP.metric==="f"?s[2]:s[1]);
   $('#espFoot').textContent=`${fmt(data.length)} tramos de la Red Vial Nacional con siniestros (accidentes pegados a su vía más cercana) · color y grosor ∝ ${ESP.metric==='f'?'fallecidos':'siniestros'} del tramo`;
   legendRamp(mx,ESP.metric==='f'?'fallecidos por tramo':'siniestros por tramo');
@@ -794,14 +814,15 @@ function renderEspacial(keepView){
   setEspDesc();
   if(needScope&&!scoped){$('#deckPrompt').style.display='flex';$('#espFoot').textContent='';$('#espLegend').innerHTML='';deckgl.setProps({layers:[basemapLayer()]});return;}
   $('#deckPrompt').style.display='none';
-  const pts=(ESP.mode==='red'||ESP.mode==='bivar')?null:espFiltered();
-  let dataLayers;
-  if(ESP.mode==='hex')dataLayers=[buildHex(pts)];
-  else if(ESP.mode==='contour')dataLayers=[buildContour(pts)];
-  else if(ESP.mode==='red')dataLayers=[buildRed()];
-  else if(ESP.mode==='bivar')dataLayers=[buildBivar()];
-  else dataLayers=buildCluster(pts);
-  deckgl.setProps({viewState:espView,layers:[basemapLayer(),...dataLayers]});
+  if(ESP.mode==='bivar'){deckgl.setProps({viewState:espView,layers:[basemapLayer(),buildBivar()]});return;}
+  deckgl.setProps({viewState:espView,layers:[basemapLayer()]});   // base mientras cargan los datos del territorio
+  ensureScope().then(()=>{if(currentView!=='espacial')return;
+    let dl;
+    if(ESP.mode==='hex')dl=[buildHex(espFiltered())];
+    else if(ESP.mode==='contour')dl=[buildContour(espFiltered())];
+    else if(ESP.mode==='red')dl=[buildRed()];
+    else dl=buildCluster(espFiltered());
+    deckgl.setProps({viewState:espView,layers:[basemapLayer(),...dl]});});
 }
 $('#espMode').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#espMode').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');ESP.mode=b.dataset.e;superKey='';renderEspacial(false);});
 $('#espMetric').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#espMetric').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');ESP.metric=b.dataset.m;superKey='';renderEspacial(true);});
