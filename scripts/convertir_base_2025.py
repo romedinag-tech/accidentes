@@ -25,7 +25,9 @@ def main():
     out = pd.DataFrame(index=df.index)
     # temporalidad
     out['anio'] = pd.to_numeric(df['AÑO'], errors='coerce').astype('Int64')
-    fecha = pd.to_datetime(df['FECHA'], errors='coerce', utc=True)
+    # FECHA viene como epoch en MILISEGUNDOS (int64). Sin unit='ms', pandas la lee
+    # como nanosegundos y todo cae en 1970-01-01 (mes=1, jueves) -> mata mes y día.
+    fecha = pd.to_datetime(df['FECHA'], unit='ms', errors='coerce', utc=True)
     out['fecha'] = fecha
     out['mes'] = fecha.dt.month.astype('Int64')
     out['dia_semana'] = (fecha.dt.dayofweek + 1).astype('Int64')   # 1=Lun..7=Dom
