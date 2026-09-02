@@ -165,16 +165,22 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     <div class="method-body" id="method"></div>
   </details>
 
+  <div class="tabs" id="mainTabs" style="margin:8px 0 14px">
+    <button data-v="siniestros" class="on">Siniestros</button>
+    <button data-v="personas">Personas accidentadas</button>
+  </div>
+
   <div class="filters">
     <div class="fg"><label>Años</label><div class="chips" id="fAnios"></div></div>
     <div class="fg"><label>Región</label><select id="fRegion"></select></div>
-    <div class="fg"><label>Comuna / ciudad</label><select id="fComuna"></select></div>
-    <div class="fg"><label>Modo involucrado</label><select id="fModo"></select></div>
+    <div class="fg" id="fgComuna"><label>Comuna / ciudad</label><select id="fComuna"></select></div>
+    <div class="fg" id="fgModo"><label>Modo involucrado</label><select id="fModo"></select></div>
     <div class="fg"><label>Zona</label><select id="fZona"></select></div>
     <div class="fg"><label>&nbsp;</label><button class="tbtn" id="reset">Limpiar filtros</button></div>
   </div>
   <div id="breadcrumb"></div>
 
+  <div id="viewSiniestros">
   <div class="kpis" id="kpis"></div>
 
   <div class="grid">
@@ -231,6 +237,32 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     <h2>Comunas con más siniestros <span class="hint">clic para ver la ciudad</span></h2>
     <div style="max-height:340px;overflow:auto"><table id="tTop"></table></div>
   </div>
+  </div><!-- /viewSiniestros -->
+
+  <div id="viewPersonas" hidden>
+    <p class="desc" id="persLead" style="margin:0 0 14px;color:var(--ink-mid);max-width:80ch"></p>
+    <div class="kpis" id="pkpis"></div>
+    <div class="grid">
+      <div class="card">
+        <h2>Accidentados por grupo etario</h2>
+        <p class="desc">Barras = personas accidentadas; la línea, fallecidos. Las personas mayores concentran una proporción de fallecidos muy superior a su peso en accidentados.</p>
+        <div class="chartbox"><canvas id="cPersEdad"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Pirámide por edad y sexo</h2>
+        <p class="desc">Personas accidentadas por rango de edad; hombres a la izquierda, mujeres a la derecha.</p>
+        <div class="chartbox" style="height:300px"><canvas id="cPersPir"></canvas></div>
+      </div>
+    </div>
+    <div class="charts2">
+      <div class="card"><h2>Por tipo de usuario / vehículo</h2><p class="desc">Incluye automóvil, camioneta, moto, peatón, camión, bus/taxibus, bicicleta, etc.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuario"></canvas></div></div>
+      <div class="card"><h2>Fallecidos por tipo de usuario</h2><p class="desc">Mortalidad absoluta por modo — peatones y motociclistas pesan mucho más en fallecidos que en accidentados.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuarioF"></canvas></div></div>
+    </div>
+    <div class="charts2">
+      <div class="card"><h2>Por rol en el siniestro</h2><div class="chartbox sm"><canvas id="cPersRol"></canvas></div></div>
+      <div class="card"><h2>Fallecidos por grupo etario</h2><div class="chartbox sm"><canvas id="cPersEdadF"></canvas></div></div>
+    </div>
+  </div>
 
   <footer>
     <span id="foot"></span>
@@ -238,7 +270,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </footer>
 </div>
 
-<script src="data_bundle.js?v=3"></script>
+<script src="data_bundle.js?v=4"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const $=s=>document.querySelector(s);
@@ -475,12 +507,78 @@ function renderBreadcrumb(){const bc=$('#breadcrumb'),parts=['<b>Chile</b>'];
   if(state.comuna!=null)parts.push(`<b>${D.comunas[state.comuna].nombre}</b> <span class="cx" title="quitar" onclick="clearComuna()">✕</span>`);
   bc.innerHTML=parts.join(' › ')+(state.comuna!=null?'  — tendencia y zonas de concentración de esta comuna':'  — clic en una comuna (mapa o tabla) para ver su tendencia y sus zonas');}
 window.clearComuna=()=>selectComuna(null);
-function render(){const A=aggGeo();renderKpis(A);renderCharts(A);renderTop(A);renderMap(A);renderBreadcrumb();
+let currentView='siniestros';
+function render(){
+  if(currentView==='personas'){renderPersonas();return;}
+  const A=aggGeo();renderKpis(A);renderCharts(A);renderTop(A);renderMap(A);renderBreadcrumb();
   const amb=state.comuna!=null?D.comunas[state.comuna].nombre:state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
   $('#mapHint').textContent='· '+amb;
   $('#mapDesc').textContent=state.mapMode==='heat'?'Zonas con mayor densidad de siniestros dentro de la ciudad (mapa de calor).':'Color por '+metricLabel[state.metric]+'. Clic en una comuna para ver su detalle.';
   if($('#anioTitle').firstChild) $('#anioTitle').childNodes[0].nodeValue='Evolución anual por modo — '+amb;
 }
+
+/* ---------- Vista PERSONAS accidentadas (fase 2) ---------- */
+const PZ=D.personas;
+const PAL_EDAD=['#6BAED6','#4292C6','#2171B5','#B2182B','#B0B7C3']; // niños..jóvenes..mayores(rojo)..no informa
+function aggPers(fact,size){const n=new Array(size).fill(0),f=new Array(size).fill(0);
+  for(const [cod,an,zo,idx,nv,fv] of fact){if(!anioOk(an)||!zonaOk(zo))continue;if(state.region!=null&&cod!==state.region)continue;n[idx]+=nv;f[idx]+=fv;}
+  return {n,f};}
+function aggPiramide(){const R=PZ.rangos.length,S=PZ.sexos.length;const m=Array.from({length:R},()=>new Array(S).fill(0));
+  for(const [cod,an,zo,ra,sx,n] of PZ.piramide){if(!anioOk(an)||!zonaOk(zo))continue;if(state.region!=null&&cod!==state.region)continue;m[ra][sx]+=n;}
+  return m;}
+function renderPersonas(){
+  if(!PZ){$('#viewPersonas').innerHTML='<div class="card">Datos de personas no disponibles.</div>';return;}
+  const tick=css('--ink-lo'),grid=css('--line'),dgr=css('--red'),acc=css('--accent'),teal=css('--teal');
+  const amb=state.region!=null?regName(state.region).replace('Región ',''):'todo Chile';
+  $('#persLead').textContent=`Análisis a nivel de persona (accidentados) — ${amb}, ${PZ.anios[0]}–${PZ.anios[PZ.anios.length-1]}. Un siniestro involucra a varias personas; aquí se cuentan las personas, no los siniestros. Responde a los filtros de año, región y zona.`;
+  const ed=aggPers(PZ.edad,PZ.catEdad.length);
+  const totN=ed.n.reduce((a,b)=>a+b,0),totF=ed.f.reduce((a,b)=>a+b,0);
+  const iMay=PZ.catEdad.indexOf('Personas mayores'),iNin=PZ.catEdad.indexOf('Niños');
+  const kpis=[
+    ['Personas accidentadas',fmt(totN),PZ.anios[0]+'–'+PZ.anios[PZ.anios.length-1]+' · '+amb],
+    ['Fallecidos',fmt(totF),'personas'],
+    ['Niños accidentados',fmt(iNin>=0?ed.n[iNin]:0),(iNin>=0?fmt1(100*ed.f[iNin]/Math.max(1,ed.n[iNin])):'–')+'% letalidad'],
+    ['Personas mayores',fmt(iMay>=0?ed.n[iMay]:0),(iMay>=0?fmt1(100*ed.n[iMay]/Math.max(1,totN)):'–')+'% de accidentados'],
+    ['Fallecidos personas mayores',fmt(iMay>=0?ed.f[iMay]:0),(iMay>=0?fmt1(100*ed.f[iMay]/Math.max(1,totF)):'–')+'% de fallecidos'],
+  ];
+  $('#pkpis').innerHTML=kpis.map(k=>`<div class="kpi"><div class="n">${k[1]}</div><div class="l">${k[0]}</div><div class="d">${k[2]}</div></div>`).join('');
+  // grupo etario (n + línea fallecidos)
+  mkP('cPersEdad',{type:'bar',data:{labels:PZ.catEdad,datasets:[
+    {label:'Accidentados',data:ed.n,backgroundColor:PZ.catEdad.map((c,i)=>c==='Personas mayores'?dgr:acc),borderRadius:4,yAxisID:'y'},
+    {type:'line',label:'Fallecidos',data:ed.f,borderColor:dgr,backgroundColor:dgr,borderWidth:2,tension:.3,yAxisID:'y1'}]},
+    options:{...baseOpts(),plugins:{legend:{display:true,position:'bottom',labels:{color:tick,boxWidth:11,font:{size:10}}}},
+      scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:tick}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
+  mkP('cPersEdadF',{type:'bar',data:{labels:PZ.catEdad,datasets:[{label:'Fallecidos',data:ed.f,backgroundColor:dgr,borderRadius:4}]},options:baseOpts()});
+  // pirámide edad × sexo
+  const pir=aggPiramide();const iM=PZ.sexos.findIndex(s=>/MASC/i.test(s)),iF=PZ.sexos.findIndex(s=>/FEM/i.test(s));
+  const hombres=PZ.rangos.map((_,r)=>-(pir[r][iM]||0)),mujeres=PZ.rangos.map((_,r)=>(pir[r][iF]||0));
+  mkP('cPersPir',{type:'bar',data:{labels:PZ.rangos,datasets:[
+    {label:'Hombres',data:hombres,backgroundColor:acc,borderRadius:3},
+    {label:'Mujeres',data:mujeres,backgroundColor:'#c94f9a',borderRadius:3}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:true,position:'bottom',labels:{color:tick,boxWidth:11,font:{size:10}}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(Math.abs(c.parsed.x))}}},
+      scales:{x:{stacked:true,grid:{color:grid},ticks:{color:tick,callback:v=>fmt(Math.abs(v))}},y:{stacked:true,grid:{color:grid},ticks:{color:tick}}}}});
+  // tipo de usuario
+  const us=aggPers(PZ.usuario,PZ.usuarios.length);
+  const usOrd=PZ.usuarios.map((u,i)=>[u,us.n[i],us.f[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  mkP('cPersUsuario',{type:'bar',data:{labels:usOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:usOrd.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},options:{...baseOpts(),indexAxis:'y'}});
+  const usF=usOrd.slice().sort((a,b)=>b[2]-a[2]);
+  mkP('cPersUsuarioF',{type:'bar',data:{labels:usF.map(x=>x[0]),datasets:[{label:'Fallecidos',data:usF.map(x=>x[2]),backgroundColor:dgr,borderRadius:4}]},options:{...baseOpts(),indexAxis:'y'}});
+  // rol
+  const ro=aggPers(PZ.rol,PZ.roles.length);
+  const roOrd=PZ.roles.map((r,i)=>[cap(r),ro.n[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  mkP('cPersRol',{type:'bar',data:{labels:roOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:roOrd.map(x=>x[1]),backgroundColor:acc,borderRadius:4}]},options:{...baseOpts(),indexAxis:'y'}});
+}
+let pcharts={};
+function mkP(id,cfg){if(pcharts[id])pcharts[id].destroy();pcharts[id]=new Chart($('#'+id),cfg);}
+// tabs
+$('#mainTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  $('#mainTabs').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  currentView=b.dataset.v;const pers=currentView==='personas';
+  $('#viewSiniestros').hidden=pers;$('#viewPersonas').hidden=!pers;
+  $('#fgComuna').style.display=pers?'none':'';$('#fgModo').style.display=pers?'none':'';$('#breadcrumb').style.display=pers?'none':'';
+  render();if(!pers&&map)setTimeout(()=>{map.invalidateSize();renderMap(curAgg);},60);
+});
 
 /* ---------- Init ---------- */
 const totalS=D.factGeo.reduce((a,r)=>a+r[4],0);
@@ -488,7 +586,8 @@ $('#lead').textContent=`${fmt(totalS)} siniestros de tránsito georreferenciados
 $('#method').innerHTML=`<b>Fuente:</b> ${M.fuente}. <b>Cartografía:</b> DPA Censal 2017 (Esri Chile), 345 comunas / 16 regiones. `+
   `<b>Alcance:</b> ${M.nota} `+
   `<b>Modo involucrado:</b> el peatón se identifica por el flag de atropello; motocicleta y bicicleta por su participación en el siniestro. Bus, camión y otros vehículos no vienen marcados por separado en esta base y se agrupan como "vehículo". `+
-  `<b>Tasas:</b> por 100 mil habitantes con población del Censo 2017. Los gráficos de tipo, causa, mes, hora y día responden a los filtros de año, región y modo (no a comuna ni zona). Datos referenciales.`;
+  `<b>Tasas:</b> por 100 mil habitantes con población del Censo 2017. Los gráficos de tipo, causa, mes, hora y día responden a los filtros de año, región y modo (no a comuna ni zona). `+
+  `<b>Personas accidentadas (pestaña):</b> base a nivel de persona/participante de CONASET (770 mil personas, 2020–2024), con edad, grupo etario, sexo, rol (conductor/pasajero/peatón) y tipo de usuario/vehículo (incluye bus, camión, etc.); un siniestro involucra a varias personas, así que ahí se cuentan personas, no siniestros. Datos referenciales.`;
 $('#foot').textContent=`Actualizado ${M.generado} · Rodrigo Medina González`;
 
 const themeBtn=$('#themeBtn');

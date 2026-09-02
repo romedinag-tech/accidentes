@@ -16,8 +16,15 @@ mes, hora y día de la semana. Filtros: año, región, **comuna**, **modo involu
 banderas de **modo involucrado** (peatón/atropello, motocicleta, bicicleta; el resto = vehículo) y causa
 agrupada. Reemplazó a la base 2020–2024 anterior. Descarga: `scripts/descargar_base_2025.py` →
 `scripts/convertir_base_2025.py` → `procesar_accidentes.py`. **Edad del accidentado** (niños/adultos/
-mayores) NO está en el portal de mapas: vive en el Observatorio CONASET (`estadconaset.mtt.gob.cl`) —
-pendiente como fase 2.
+mayores): pestaña **"Personas accidentadas"** (fase 2), desde la base a nivel de persona de CONASET
+`Base_de_persona_vehiculo_4` (770.414 personas, 2020–2024) — con edad, grupo etario, sexo, rol
+(conductor/pasajero/peatón) y tipo de usuario/vehículo (incluye **bus, camión, minibús**, etc.).
+Descarga: `scripts/descargar_personas.py` (paso = maxRecordCount del servicio) →
+`scripts/convertir_personas.py`. Se encontró vía los dashboards ArcGIS "Usuarios vulnerables" y
+"Características de los participantes".
+
+**Dos pestañas:** *Siniestros* (nivel siniestro, con mapa) y *Personas accidentadas* (nivel persona:
+grupo etario, pirámide edad×sexo, tipo de usuario, rol; sin mapa porque no trae geometría).
 
 Dos vistas de análisis focalizado:
 - **Tendencia por ciudad segmentada por tipo.** Al elegir una comuna (clic en el mapa o selector),

@@ -97,6 +97,35 @@ def geojson(path, cols, tol):
 GJ_COMUNAS = geojson(f'{P}/cartografia/comunas.parquet', ['cut_com'], 0.02)
 GJ_REGIONES = geojson(f'{P}/cartografia/regiones.parquet', ['cod_region'], 0.03)
 
+# ---------- FASE 2: personas accidentadas (base persona_vehiculo) ----------
+PERS = None
+ppath = os.path.join(BASE, 'data', 'parquet', 'personas.parquet')
+if os.path.exists(ppath):
+    PP = f"read_parquet('{ppath.replace(chr(92), '/')}')"
+    PW = "anio IS NOT NULL AND cod_region IS NOT NULL"
+    CAT_EDAD = ['Niños', 'Jóvenes', 'Adultos jóvenes', 'Personas mayores', 'No se informa']
+    RANGOS = ['0 a 14 años', '15 a 29 años', '30 a 44 años', '45 a 59 años', '60 años y más', 'No se informa']
+    pres = set(q(f"SELECT DISTINCT cat_edad FROM {PP}").cat_edad.dropna())
+    CAT_EDAD = [c for c in CAT_EDAD if c in pres] + [c for c in pres if c not in CAT_EDAD]
+    USUARIOS = list(q(f"SELECT usuario, count(*) n FROM {PP} WHERE {PW} AND usuario IS NOT NULL GROUP BY 1 ORDER BY n DESC").usuario)
+    ROLES = list(q(f"SELECT rol, count(*) n FROM {PP} WHERE {PW} AND rol IS NOT NULL GROUP BY 1 ORDER BY n DESC").rol)
+    SEXOS = list(q(f"SELECT sexo, count(*) n FROM {PP} WHERE {PW} AND sexo IS NOT NULL GROUP BY 1 ORDER BY n DESC").sexo)
+    PANIOS = [int(x) for x in q(f"SELECT DISTINCT anio FROM {PP} WHERE anio IS NOT NULL ORDER BY anio").anio]
+    ce_idx = {c: i for i, c in enumerate(CAT_EDAD)}; us_idx = {c: i for i, c in enumerate(USUARIOS)}
+    ro_idx = {c: i for i, c in enumerate(ROLES)}; sx_idx = {c: i for i, c in enumerate(SEXOS)}; ra_idx = {c: i for i, c in enumerate(RANGOS)}
+    def pmet(dc):
+        return q(f"SELECT cod_region, anio, {ZONA} zona, {dc} d, count(*) n, sum(fallecidos) f FROM {PP} WHERE {PW} AND {dc} IS NOT NULL GROUP BY cod_region, anio, {ZONA}, {dc}")
+    def pack(df, idx):
+        return [[int(r.cod_region), int(r.anio), int(r.zona), idx[r.d], int(r.n), int(r.f or 0)] for r in df.itertuples() if r.d in idx]
+    PERS_EDAD = pack(pmet('cat_edad'), ce_idx)
+    PERS_USUARIO = pack(pmet('usuario'), us_idx)
+    PERS_ROL = pack(pmet('rol'), ro_idx)
+    pir = q(f"SELECT cod_region, anio, {ZONA} zona, rango_etareo ra, sexo sx, count(*) n FROM {PP} WHERE {PW} AND rango_etareo IS NOT NULL AND sexo IS NOT NULL GROUP BY cod_region, anio, {ZONA}, rango_etareo, sexo")
+    PERS_PIR = [[int(r.cod_region), int(r.anio), int(r.zona), ra_idx[r.ra], sx_idx[r.sx], int(r.n)] for r in pir.itertuples() if r.ra in ra_idx and r.sx in sx_idx]
+    PERS = {'anios': PANIOS, 'catEdad': CAT_EDAD, 'usuarios': USUARIOS, 'roles': ROLES, 'sexos': SEXOS, 'rangos': RANGOS,
+            'edad': PERS_EDAD, 'usuario': PERS_USUARIO, 'rol': PERS_ROL, 'piramide': PERS_PIR}
+    print(f'  PERSONAS: edad={len(PERS_EDAD)} usuario={len(PERS_USUARIO)} rol={len(PERS_ROL)} piramide={len(PERS_PIR)} · años {PANIOS[0]}-{PANIOS[-1]}')
+
 DATA = {
     'meta': {
         'generado': BUILD, 'anios': list(range(ANIO_MIN, ANIO_MAX + 1)),
@@ -112,6 +141,7 @@ DATA = {
     'comunas': COMUNAS, 'factGeo': FACT_GEO,
     'factTipo': FACT_TIPO, 'factCausa': FACT_CAUSA, 'factMes': FACT_MES, 'factHora': FACT_HORA, 'factDia': FACT_DIA,
     'gridHot': GRID_HOT, 'geoComunas': GJ_COMUNAS, 'geoRegiones': GJ_REGIONES,
+    'personas': PERS,
 }
 out = os.path.join(BASE, 'data_bundle.js')
 with open(out, 'w', encoding='utf-8') as f:
