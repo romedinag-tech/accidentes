@@ -13,6 +13,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
 <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
@@ -53,9 +54,10 @@ h1,h2,h3{font-family:var(--font-display);color:var(--ink);letter-spacing:-.01em;
 .num{font-family:var(--font-data);font-variant-numeric:tabular-nums}
 a{color:var(--accent)}
 
-/* Header institucional — título grande y centrado */
+/* Header institucional — título grande y centrado, en caja redondeada del ancho del contenido */
 .apptop{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;
-  padding:34px 26px 28px;background:var(--grad);color:#fff}
+  padding:30px 26px 26px;background:var(--grad);color:#fff;border-radius:var(--r-lg);
+  margin-bottom:18px;overflow:hidden;box-shadow:var(--sh)}
 .apptop .emblem{width:44px;height:44px;opacity:.9;margin-bottom:4px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .apptop .brand{font-family:var(--font-display);font-weight:700;font-size:2.5rem;line-height:1.04;letter-spacing:-.02em}
 .apptop .sub{font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;opacity:.82;font-weight:600;margin-top:2px}
@@ -73,12 +75,13 @@ a{color:var(--accent)}
   stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px}
 .card h2 .ic,.grp-hd .ic{color:var(--accent)}
 
-/* Navegación por pestañas (vista) */
+/* Navegación por pestañas (vista) — ancho completo, simétrica con los cuadros de abajo */
 .tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:13px;
-  padding:6px;box-shadow:var(--sh-sm);width:fit-content;max-width:100%;margin:0 auto 20px;flex-wrap:wrap;justify-content:center}
+  padding:6px;box-shadow:var(--sh);margin:0 0 18px}
 :root[data-theme="dark"] .tabs{background-image:var(--card-grad);box-shadow:var(--card-3d)}
-.tabs button{display:inline-flex;align-items:center;gap:8px;border:none;background:none;color:var(--ink-mid);
-  font-family:var(--font-ui);font-weight:600;font-size:.92rem;padding:9px 17px;border-radius:9px;cursor:pointer;transition:.15s}
+.tabs button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;background:none;color:var(--ink-mid);
+  font-family:var(--font-ui);font-weight:600;font-size:.92rem;padding:11px 17px;border-radius:9px;cursor:pointer;transition:.15s}
+@media(max-width:620px){.tabs{flex-wrap:wrap}.tabs button{flex:1 1 100%}}
 .tabs button:hover{background:var(--surface-alt);color:var(--ink)}
 .tabs button.on{background:var(--navy);color:#fff;box-shadow:0 2px 8px rgba(14,35,56,.18)}
 :root[data-theme="dark"] .tabs button.on{color:#0a0d13}
@@ -181,6 +184,19 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 .leaflet-container{background:var(--surface-alt)}
 /* Basemap OSM: en modo oscuro se oscurece por filtro CSS (sin depender de tiles oscuros externos) */
 :root[data-theme="dark"] .basemap-osm{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.95) saturate(.75)}
+/* Gráficos ampliables: cursor y modal de exportación */
+.chartbox canvas{cursor:zoom-in}
+#chartModal{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,12,20,.62);backdrop-filter:blur(2px);padding:24px}
+#chartModal[hidden]{display:none}
+.cm-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh);
+  width:min(1000px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+:root[data-theme="dark"] .cm-box{background-image:var(--card-grad);box-shadow:var(--card-3d)}
+.cm-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.cm-head h3{font-size:1.08rem;display:flex;align-items:center;gap:9px}
+.cm-head .cm-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.cm-canvas{position:relative;height:min(64vh,620px);padding:16px 18px}
+.cm-hint{padding:0 18px 14px;font-size:.74rem;color:var(--ink-lo)}
 </style>
 </head>
 <body>
@@ -204,6 +220,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   <symbol id="i-pulse" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
 </svg>
+<div class="wrap">
 <header class="apptop">
   <div class="actions">
     <span class="live-badge"><svg class="ic" style="width:13px;height:13px"><use href="#i-globe"/></svg> Datos abiertos</span>
@@ -215,7 +232,6 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   <div class="sub" id="hsub">Base consolidada CONASET · 2020–2025</div>
 </header>
 
-<div class="wrap">
   <div class="tabs" id="mainTabs">
     <button data-v="siniestros" class="on"><svg class="ic"><use href="#i-alert"/></svg>Siniestros</button>
     <button data-v="personas"><svg class="ic"><use href="#i-users"/></svg>Personas accidentadas</button>
@@ -267,7 +283,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <h2 id="anioTitle"><svg class="ic"><use href="#i-trend"/></svg>Evolución anual por modo</h2>
       <p class="desc">Altura total = siniestros del año; cada color, un modo involucrado. La línea marca los fallecidos.</p>
       <div class="chartbox"><canvas id="cAnio"></canvas></div>
-      <h3>Siniestros por región</h3>
+      <h3>Siniestros por región <span class="hint">todas las regiones, para comparar; la elegida va resaltada</span></h3>
       <div class="chartbox" style="height:300px"><canvas id="cRegion"></canvas></div>
     </div>
   </div>
@@ -289,7 +305,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 
   <div class="card" style="margin-bottom:18px">
     <h2><svg class="ic"><use href="#i-building"/></svg>Comunas con más siniestros <span class="hint">clic para ver la ciudad</span></h2>
-    <div style="max-height:340px;overflow:auto"><table id="tTop"></table></div>
+    <div style="overflow-x:auto"><table id="tTop"></table></div>
   </div>
   </div><!-- /viewSiniestros -->
 
@@ -354,6 +370,20 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     <span id="foot"></span>
     <span>Fuente: <a href="https://mapas-conaset.opendata.arcgis.com" target="_blank" rel="noopener">CONASET</a> · Cartografía DPA Censal (Esri Chile) · Mapa base © OpenStreetMap · Satélite © Esri</span>
   </footer>
+</div>
+
+<div id="chartModal" hidden>
+  <div class="cm-box">
+    <div class="cm-head">
+      <h3 id="cmTitle"><svg class="ic"><use href="#i-bar"/></svg><span id="cmTitleTxt"></span></h3>
+      <div class="cm-actions">
+        <button class="tbtn" id="cmDl">⤓ Descargar PNG</button>
+        <button class="hdr-btn" id="cmClose" style="color:var(--ink);border-color:var(--line);background:var(--surface-alt)" title="Cerrar" aria-label="Cerrar">✕</button>
+      </div>
+    </div>
+    <div class="cm-canvas"><canvas id="cmCanvas"></canvas></div>
+    <div class="cm-hint">Consejo: para pegarlo en un informe, usa «Descargar PNG» o haz clic derecho sobre el gráfico y «Guardar imagen como…».</div>
+  </div>
 </div>
 
 <script src="data_bundle.js?v=9"></script>
@@ -451,6 +481,12 @@ function aggGeo(){
   }
   return {porComuna,porRegion,porModo,porAnio,porAnioModo,T};
 }
+// Siniestros por región a nivel NACIONAL (respeta año/modo/zona, ignora el ámbito) — para comparar siempre las 16.
+function aggRegionNat(){const m=new Map();
+  for(const [ci,an,mo,zo,s] of D.factGeo){if(!anioOk(an)||!zonaOk(zo)||!modoOk(mo))continue;
+    const cod=D.comunas[ci].cod;m.set(cod,(m.get(cod)||0)+s);}
+  return m;
+}
 // facts secundarios keyed [cod_region, anio, modo, dim, s, m] — filtran año/región/modo
 function aggDim(fact,size){const arr=new Array(size).fill(0),arrM=new Array(size).fill(0);
   for(const [cod,an,mo,d,s,m] of fact){if(!anioOk(an)||!modoOk(mo))continue;if(state.region!=null&&cod!==state.region)continue;arr[d]+=s;arrM[d]+=m;}
@@ -520,12 +556,23 @@ function renderFrase(A){
 
 /* ---------- Charts ---------- */
 Chart.defaults.font.family="Inter,-apple-system,Segoe UI,Roboto,sans-serif";
+if(window.ChartDataLabels){Chart.register(ChartDataLabels);Chart.defaults.set('plugins.datalabels',{display:false});} // % solo donde se pida
+// Etiquetas de porcentaje sobre las barras. horizontal=true para barras en Y; total fija el 100% (pirámide); minShare oculta trozos ínfimos.
+function pctLabels({horizontal=false,total=null,minShare=0}={}){
+  const sumAbs=arr=>arr.reduce((a,b)=>a+Math.abs(+b||0),0);
+  return {display:ctx=>{if(ctx.dataset.type==='line')return false;const v=Math.abs(+ctx.dataset.data[ctx.dataIndex]||0);if(!v)return false;
+      const t=total!=null?total:sumAbs(ctx.chart.data.datasets[ctx.datasetIndex].data);return t>0&&v/t>=minShare;},
+    color:css('--ink-mid'),anchor:'end',align:horizontal?'right':'top',offset:3,clamp:true,clip:false,font:{weight:'600',size:10},
+    formatter:(v,ctx)=>{const t=total!=null?total:sumAbs(ctx.chart.data.datasets[ctx.datasetIndex].data);return t?(Math.abs(v)/t*100).toFixed(1).replace('.',',')+'%':'';}};}
+// Inyecta datalabels de % y aire (grace) en el eje de valores, preservando el resto de opciones.
+function withPct(opts,cfg={}){opts.plugins=Object.assign({},opts.plugins,{datalabels:pctLabels(cfg)});
+  const ax=cfg.horizontal?'x':'y';opts.scales=Object.assign({},opts.scales);opts.scales[ax]=Object.assign({},opts.scales[ax],{grace:'14%'});return opts;}
 let charts={};
 function baseOpts(){const grid=css('--line'),tick=css('--ink-lo');
   return {responsive:true,maintainAspectRatio:false,animation:{duration:350},
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y??c.parsed.x)}}},
     scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{grid:{color:grid},ticks:{color:tick},beginAtZero:true}}};}
-function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart($('#'+id),cfg);}
+function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart($('#'+id),cfg);attachZoom(id);}
 function renderCharts(A){
   const acc=css('--accent'),teal=css('--teal'),dgr=css('--red'),tick=css('--ink-lo'),grid=css('--line');
   const anios=M.anios;
@@ -540,24 +587,27 @@ function renderCharts(A){
       scales:{x:{stacked:true,grid:{color:grid},ticks:{color:tick}},
         y:{stacked:true,position:'left',grid:{color:grid},ticks:{color:tick},beginAtZero:true},
         y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
-  const regs=M.regiones.slice().sort((a,b)=>((A.porRegion.get(b.cod)||{}).s||0)-((A.porRegion.get(a.cod)||{}).s||0));
+  const regNat=aggRegionNat();
+  const hl=(state.region!=null||state.comuna!=null||state.metro!=null)?new Set(scopeRegions()):new Set();
+  const regs=M.regiones.slice().sort((a,b)=>(regNat.get(b.cod)||0)-(regNat.get(a.cod)||0));
   mk('cRegion',{type:'bar',data:{labels:regs.map(r=>r.nombre.replace('Región ','')),
-    datasets:[{label:'Siniestros',data:regs.map(r=>(A.porRegion.get(r.cod)||{}).s||0),backgroundColor:acc,borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y'}});
+    datasets:[{label:'Siniestros',data:regs.map(r=>regNat.get(r.cod)||0),
+      backgroundColor:regs.map(r=>hl.has(r.cod)?acc:css('--ink-lo')),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.x)+(hl.has(regs[c.dataIndex].cod)?'  ◆ ámbito elegido':'')}}}}});
   // Por MODO involucrado (siniestros)
   mk('cModo',{type:'bar',data:{labels:M.modos,datasets:[{label:'Siniestros',data:A.porModo,
     backgroundColor:M.modos.map((_,i)=>PAL_M[i]),borderRadius:5}]},
-    options:{...baseOpts(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.y)}}}}});
+    options:withPct({...baseOpts(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.y)}}}},{horizontal:false})});
   // Por tipo de siniestro
   const tD=aggDim(D.factTipo,M.tipos.length);
   const ti=M.tipos.map((t,i)=>[cap(t),tD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
   mk('cTipo',{type:'bar',data:{labels:ti.map(x=>x[0]),datasets:[{label:'Siniestros',data:ti.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y'}});
+    options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
   // Principales causas (clasificación agrupada CONASET)
   const cD=aggDim(D.factCausa,M.causas.length);
   const ci=M.causas.map((c,i)=>[cap(c),cD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
   mk('cCausa',{type:'bar',data:{labels:ci.map(x=>x[0]),datasets:[{label:'Siniestros',data:ci.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y'}});
+    options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
   const mes=aggDim(D.factMes,13),ML=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   mk('cMes',{type:'bar',data:{labels:ML.slice(1),datasets:[{label:'Siniestros',data:mes.s.slice(1),backgroundColor:acc,borderRadius:4}]},options:baseOpts()});
   const hora=aggDim(D.factHora,24);
@@ -730,31 +780,59 @@ function renderPersonas(){
   mkP('cPersEdad',{type:'bar',data:{labels:PZ.catEdad,datasets:[
     {label:'Accidentados',data:ed.n,backgroundColor:PZ.catEdad.map((c,i)=>c==='Personas mayores'?dgr:acc),borderRadius:4,yAxisID:'y'},
     {type:'line',label:'Fallecidos',data:ed.f,borderColor:dgr,backgroundColor:dgr,borderWidth:2,tension:.3,yAxisID:'y1'}]},
-    options:{...baseOpts(),plugins:{legend:{display:true,position:'bottom',labels:{color:tick,boxWidth:11,font:{size:10}}}},
-      scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:tick}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
-  mkP('cPersEdadF',{type:'bar',data:{labels:PZ.catEdad,datasets:[{label:'Fallecidos',data:ed.f,backgroundColor:dgr,borderRadius:4}]},options:baseOpts()});
+    options:withPct({...baseOpts(),plugins:{legend:{display:true,position:'bottom',labels:{color:tick,boxWidth:11,font:{size:10}}}},
+      scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:tick}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}},{horizontal:false})});
+  mkP('cPersEdadF',{type:'bar',data:{labels:PZ.catEdad,datasets:[{label:'Fallecidos',data:ed.f,backgroundColor:dgr,borderRadius:4}]},options:withPct({...baseOpts()},{horizontal:false})});
   // pirámide edad × sexo
   const pir=aggPiramide();const iM=PZ.sexos.findIndex(s=>/MASC/i.test(s)),iF=PZ.sexos.findIndex(s=>/FEM/i.test(s));
   const hombres=PZ.rangos.map((_,r)=>-(pir[r][iM]||0)),mujeres=PZ.rangos.map((_,r)=>(pir[r][iF]||0));
+  const pirTot=hombres.reduce((a,b)=>a+Math.abs(b),0)+mujeres.reduce((a,b)=>a+b,0);
   mkP('cPersPir',{type:'bar',data:{labels:PZ.rangos,datasets:[
     {label:'Hombres',data:hombres,backgroundColor:acc,borderRadius:3},
     {label:'Mujeres',data:mujeres,backgroundColor:'#c94f9a',borderRadius:3}]},
     options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:true,position:'bottom',labels:{color:tick,boxWidth:11,font:{size:10}}},
-      tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(Math.abs(c.parsed.x))}}},
-      scales:{x:{stacked:true,grid:{color:grid},ticks:{color:tick,callback:v=>fmt(Math.abs(v))}},y:{stacked:true,grid:{color:grid},ticks:{color:tick}}}}});
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(Math.abs(c.parsed.x))}},
+      datalabels:{display:ctx=>{const v=Math.abs(+ctx.dataset.data[ctx.dataIndex]||0);return pirTot>0&&v/pirTot>=0.008;},
+        color:css('--ink-mid'),anchor:'end',align:ctx=>ctx.datasetIndex===0?'left':'right',offset:2,clamp:true,clip:false,font:{weight:'600',size:9},
+        formatter:v=>pirTot?(Math.abs(v)/pirTot*100).toFixed(1).replace('.',',')+'%':''}},
+      scales:{x:{stacked:true,grace:'10%',grid:{color:grid},ticks:{color:tick,callback:v=>fmt(Math.abs(v))}},y:{stacked:true,grid:{color:grid},ticks:{color:tick}}}}});
   // tipo de usuario
   const us=aggPers(PZ.usuario,PZ.usuarios.length);
   const usOrd=PZ.usuarios.map((u,i)=>[u,us.n[i],us.f[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
-  mkP('cPersUsuario',{type:'bar',data:{labels:usOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:usOrd.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},options:{...baseOpts(),indexAxis:'y'}});
+  mkP('cPersUsuario',{type:'bar',data:{labels:usOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:usOrd.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
   const usF=usOrd.slice().sort((a,b)=>b[2]-a[2]);
-  mkP('cPersUsuarioF',{type:'bar',data:{labels:usF.map(x=>x[0]),datasets:[{label:'Fallecidos',data:usF.map(x=>x[2]),backgroundColor:dgr,borderRadius:4}]},options:{...baseOpts(),indexAxis:'y'}});
+  mkP('cPersUsuarioF',{type:'bar',data:{labels:usF.map(x=>x[0]),datasets:[{label:'Fallecidos',data:usF.map(x=>x[2]),backgroundColor:dgr,borderRadius:4}]},options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
   // rol
   const ro=aggPers(PZ.rol,PZ.roles.length);
   const roOrd=PZ.roles.map((r,i)=>[cap(r),ro.n[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
-  mkP('cPersRol',{type:'bar',data:{labels:roOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:roOrd.map(x=>x[1]),backgroundColor:acc,borderRadius:4}]},options:{...baseOpts(),indexAxis:'y'}});
+  mkP('cPersRol',{type:'bar',data:{labels:roOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:roOrd.map(x=>x[1]),backgroundColor:acc,borderRadius:4}]},options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
 }
 let pcharts={};
-function mkP(id,cfg){if(pcharts[id])pcharts[id].destroy();pcharts[id]=new Chart($('#'+id),cfg);}
+function mkP(id,cfg){if(pcharts[id])pcharts[id].destroy();pcharts[id]=new Chart($('#'+id),cfg);attachZoom(id);}
+/* ---- Ampliar y exportar cualquier gráfico ---- */
+const chartById=id=>charts[id]||pcharts[id];
+function attachZoom(id){const c=$('#'+id);if(!c)return;c.style.cursor='zoom-in';c.title='Clic para ampliar y descargar';c.onclick=()=>openChartModal(id);}
+let modalChart=null;
+const whiteBg={id:'whiteBg',beforeDraw:c=>{const x=c.ctx;x.save();x.globalCompositeOperation='destination-over';x.fillStyle='#ffffff';x.fillRect(0,0,c.width,c.height);x.restore();}};
+function cloneData(d){return {labels:Array.isArray(d.labels)?d.labels.slice():d.labels,datasets:d.datasets.map(ds=>Object.assign({},ds))};}
+function openChartModal(id){const src=chartById(id);if(!src)return;
+  const card=$('#'+id).closest('.card'),h2=card&&card.querySelector('h2');
+  $('#cmTitleTxt').textContent=h2?h2.innerText.trim():'Gráfico';
+  $('#chartModal').hidden=false;
+  // altura explícita en px (garantizada > 0) para que el gráfico no colapse
+  $('.cm-canvas').style.height=Math.max(300,Math.min((window.innerHeight||800)*0.64,620))+'px';
+  if(modalChart)modalChart.destroy();
+  const cfg=src.config;
+  modalChart=new Chart($('#cmCanvas'),{type:cfg.type,data:cloneData(cfg.data),
+    options:Object.assign({},cfg.options,{maintainAspectRatio:false,animation:false}),plugins:[whiteBg]});
+  setTimeout(()=>modalChart&&modalChart.resize(),60);}
+function closeChartModal(){$('#chartModal').hidden=true;if(modalChart){modalChart.destroy();modalChart=null;}}
+$('#cmClose').onclick=closeChartModal;
+$('#chartModal').addEventListener('click',e=>{if(e.target.id==='chartModal')closeChartModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#chartModal').hidden)closeChartModal();});
+$('#cmDl').onclick=()=>{if(!modalChart)return;const url=modalChart.toBase64Image('image/png',1);
+  const a=document.createElement('a');a.href=url;a.download=(($('#cmTitleTxt').textContent||'grafico').replace(/[^\w\dáéíóúñ]+/gi,'_').replace(/^_+|_+$/g,'')||'grafico')+'.png';
+  document.body.appendChild(a);a.click();a.remove();};
 // tabs
 $('#mainTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   $('#mainTabs').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
@@ -889,7 +967,7 @@ function fitEspView(){let vs=Object.assign({},espView);const b=scopeBounds();
   else{vs.longitude=-71.3;vs.latitude=-37;vs.zoom=3.7;}
   vs.pitch=ESP.mode==='hex'?45:0;vs.bearing=ESP.mode==='hex'?-12:0;espView=vs;deckgl.setProps({viewState:espView});}
 function setEspDesc(){$('#espDesc').textContent=({hex:'Grillas hexagonales H3 con extrusión 3D: la altura codifica la magnitud exacta; arrastra con botón derecho para inclinar la cámara. La resolución se adapta al zoom.',
-  contour:'Isolíneas de densidad (KDE en bandas discretas): anillos que delimitan umbrales de concentración, sin la difuminación del mapa de calor.',
+  contour:'Contornos KDE — cómo leerlos: son curvas de nivel de siniestralidad, igual que las de un mapa topográfico, pero en vez de altura miden concentración de siniestros. Cada anillo encierra una zona con más siniestros por km² que el anillo exterior; donde los anillos se apretujan y forman un “cerro”, ahí está el foco. Del azul/frío (afuera, poca concentración) al rojo/cálido (adentro, el núcleo más peligroso). A diferencia del mapa de calor, aquí las líneas marcan umbrales nítidos, útiles para delimitar el área crítica.',
   red:'Segmentación sobre la red vial real: cada tramo se colorea por sus siniestros o fallecidos, ligando el análisis a la infraestructura.',
   riesgo:'Riesgo hexagonal: siniestros ÷ población (Censo 2024) por hexágono de ~860 m. Revela dónde el peligro es alto para la gente que ahí vive, con detalle fino que la comuna esconde.',
   cluster:'Clústeres dinámicos: burbujas con conteo a escala macro que se desagregan en puntos individuales por modo al hacer zoom.'})[ESP.mode];}
