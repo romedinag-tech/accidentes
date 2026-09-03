@@ -18,6 +18,8 @@
 <script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
 <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
 <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-array@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-contour@4"></script>
 <style>
 /* ===== Tokens estándar Goro (claro institucional / oscuro LED naranja) ===== */
 :root{
@@ -341,6 +343,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
         <div class="seg" id="espMode">
           <button data-e="hex" class="on">Hexágonos 3D</button>
           <button data-e="contour">Contornos KDE</button>
+          <button data-e="relieve">Relieve KDE 3D</button>
           <button data-e="red">Red vial</button>
           <button data-e="riesgo">Riesgo (hex)</button>
           <button data-e="cluster">Clústeres</button>
@@ -871,10 +874,15 @@ function espFiltered(){const out=[],y0=M.anios[0];
     out.push(p);}
   return out;}
 function h3res(z){return z<5?4:z<6.5?5:z<8?6:z<10?7:z<12?8:9;}
-function basemapLayer(){return new deck.TileLayer({id:'osm',data:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  minZoom:0,maxZoom:19,tileSize:256,opacity:0.85,renderSubLayers:props=>{const bb=props.tile.boundingBox||props.tile.bbox;
-    const w=bb[0][0]??bb.west,s=bb[0][1]??bb.south,e=bb[1][0]??bb.east,n=bb[1][1]??bb.north;
+// Fondo Esri gris claro: OSM devuelve 403 'Access blocked' a deck.gl y CARTO ya exige API key; Esri lo permite.
+function basemapLayer(){return new deck.TileLayer({id:'base',
+  data:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  minZoom:0,maxZoom:16,tileSize:256,opacity:1,
+  onTileLoad:()=>{clearTimeout(_baseRR);_baseRR=setTimeout(()=>{try{deckgl.redraw(true);}catch(e){}},300);},
+  renderSubLayers:props=>{const bb=props.tile.boundingBox||props.tile.bbox;
+    const w=bb[0]?.[0]??bb.west,s=bb[0]?.[1]??bb.south,e=bb[1]?.[0]??bb.east,n=bb[1]?.[1]??bb.north;
     return new deck.BitmapLayer(props,{data:null,image:props.data,bounds:[w,s,e,n]});}});}
+let _baseRR;
 function currentBounds(){try{const b=deckgl.getViewports()[0].getBounds();return Array.isArray(b[0])?[b[0][0],b[0][1],b[1][0],b[1][1]]:b;}catch(e){return[-76,-56,-66,-17];}}
 
 function buildHex(pts){const z=espView.zoom;lastHexRes=Math.round(z);
@@ -896,6 +904,26 @@ function buildContour(pts){const z=espView.zoom;const cell=z<6?4000:z<8?1500:z<1
   legendContour(contours,ESP.metric==='f'?'fallecidos':'siniestros');
   return new deck.ContourLayer({id:'contour',data:pts,getPosition:p=>[p[1],p[0]],getWeight:p=>wOf(p),
     cellSize:cell,aggregation:'SUM',contours,gpuAggregation:true});}
+// Relieve KDE 3D: la densidad de siniestros como cerros (contornos KDE extruidos en volumen).
+// OJO: NO poner `material` en la capa — dispara un LightingEffect global que apaga el basemap.
+function buildRelieve(pts){
+  const b=scopeBounds();
+  if(!b||!pts.length){$('#espFoot').textContent='Sin siniestros en el territorio para construir el relieve.';$('#espLegend').innerHTML='';return new deck.PolygonLayer({id:'relieve',data:[]});}
+  const lat0=b.getSouth(),lat1=b.getNorth(),lon0=b.getWest(),lon1=b.getEast();
+  const H=560,W=Math.max(80,Math.round(H*((lon1-lon0)*Math.cos((lat0+lat1)/2*Math.PI/180))/(lat1-lat0)));
+  const gx=lo=>(lo-lon0)/(lon1-lon0)*W,gy=la=>(lat1-la)/(lat1-lat0)*H;
+  const toLon=x=>lon0+x/W*(lon1-lon0),toLat=y=>lat1-y/H*(lat1-lat0);
+  const wFatal=ESP.metric==='f',src=wFatal?pts.filter(p=>p[7]>0):pts;
+  const dens=d3.contourDensity().x(p=>gx(p[1])).y(p=>gy(p[0])).weight(p=>wFatal?(p[7]||0):1)
+    .size([W,H]).bandwidth(14).thresholds(16)(src);
+  const maxV=Math.max(...dens.map(c=>c.value).filter(v=>v>0),1e-9),data=[];
+  for(const c of dens){if(c.value<=0)continue;
+    for(const poly of c.coordinates)data.push({rings:poly.map(r=>r.map(([x,y])=>[toLon(x),toLat(y)])),value:c.value});}
+  const ELEV=(lat1-lat0)*111000*0.11;
+  $('#espFoot').textContent=`${fmt(src.length)} ${wFatal?'siniestros con fallecidos':'siniestros'} → ${data.length} terrazas de contorno KDE extruidas · más alto y rojo = mayor concentración por km² · botón derecho inclina la cámara`;
+  $('#espLegend').innerHTML='<span>menos</span>'+RAMP.slice(1).map(c=>`<i style="width:20px;height:12px;display:inline-block;background:rgb(${c.join(',')})"></i>`).join('')+`<span>más</span><span style="margin-left:8px">· concentración de ${wFatal?'fallecidos':'siniestros'}</span>`;
+  return new deck.PolygonLayer({id:'relieve',data,extruded:true,filled:true,stroked:false,
+    getPolygon:d=>d.rings,getElevation:d=>d.value/maxV*ELEV,getFillColor:d=>[...rampCol(d.value/maxV),228]});}
 
 function buildRed(){const data=SCOPE_RED;
   const mx=maxOf(data,s=>ESP.metric==="f"?s[2]:s[1]);
@@ -965,9 +993,10 @@ function fitEspView(){let vs=Object.assign({},espView);const b=scopeBounds();
   if(b){vs.longitude=(b.getWest()+b.getEast())/2;vs.latitude=(b.getSouth()+b.getNorth())/2;
     vs.zoom=Math.min(13,Math.max(6,Math.log2(360/Math.max(0.04,b.getEast()-b.getWest()))+1));}
   else{vs.longitude=-71.3;vs.latitude=-37;vs.zoom=3.7;}
-  vs.pitch=ESP.mode==='hex'?45:0;vs.bearing=ESP.mode==='hex'?-12:0;espView=vs;deckgl.setProps({viewState:espView});}
+  const is3D=ESP.mode==='hex'||ESP.mode==='relieve';vs.pitch=is3D?50:0;vs.bearing=is3D?-15:0;espView=vs;deckgl.setProps({viewState:espView});}
 function setEspDesc(){$('#espDesc').textContent=({hex:'Grillas hexagonales H3 con extrusión 3D: la altura codifica la magnitud exacta; arrastra con botón derecho para inclinar la cámara. La resolución se adapta al zoom.',
   contour:'Contornos KDE — cómo leerlos: son curvas de nivel de siniestralidad, igual que las de un mapa topográfico, pero en vez de altura miden concentración de siniestros. Cada anillo encierra una zona con más siniestros por km² que el anillo exterior; donde los anillos se apretujan y forman un “cerro”, ahí está el foco. Del azul/frío (afuera, poca concentración) al rojo/cálido (adentro, el núcleo más peligroso). A diferencia del mapa de calor, aquí las líneas marcan umbrales nítidos, útiles para delimitar el área crítica.',
+  relieve:'Relieve KDE 3D: los mismos contornos de densidad, pero convertidos en volumen. Cada anillo se eleva como una terraza y, apiladas, forman cerros de siniestralidad — cuanto más alto y rojo, más siniestros por km². El pico marca el foco de la ciudad; las lomas menores, los sub-focos. Arrastra con el botón derecho para inclinar la cámara. Con “Ponderar por” cambias entre concentración de siniestros y de fallecidos.',
   red:'Segmentación sobre la red vial real: cada tramo se colorea por sus siniestros o fallecidos, ligando el análisis a la infraestructura.',
   riesgo:'Riesgo hexagonal: siniestros ÷ población (Censo 2024) por hexágono de ~860 m. Revela dónde el peligro es alto para la gente que ahí vive, con detalle fino que la comuna esconde.',
   cluster:'Clústeres dinámicos: burbujas con conteo a escala macro que se desagregan en puntos individuales por modo al hacer zoom.'})[ESP.mode];}
@@ -976,7 +1005,7 @@ function renderEspacial(keepView){
   if(!deckgl)initDeck();
   const scopeKey=state.region+'|'+state.comuna+'|'+state.metro,scopeChanged=scopeKey!==lastEspScope;lastEspScope=scopeKey;
   if(!keepView||scopeChanged)fitEspView();
-  const needScope=['hex','contour','cluster','red','riesgo'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null||state.metro!=null;
+  const needScope=['hex','contour','relieve','cluster','red','riesgo'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null||state.metro!=null;
   setEspDesc();
   if(needScope&&!scoped){$('#deckPrompt').style.display='flex';$('#espFoot').textContent='';$('#espLegend').innerHTML='';deckgl.setProps({layers:[basemapLayer()]});return;}
   $('#deckPrompt').style.display='none';
@@ -985,6 +1014,7 @@ function renderEspacial(keepView){
     let dl;
     if(ESP.mode==='hex')dl=[buildHex(espFiltered())];
     else if(ESP.mode==='contour')dl=[buildContour(espFiltered())];
+    else if(ESP.mode==='relieve')dl=[buildRelieve(espFiltered())];
     else if(ESP.mode==='riesgo')dl=[buildRiesgo()];
     else if(ESP.mode==='red')dl=[buildRed()];
     else dl=buildCluster(espFiltered());
