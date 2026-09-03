@@ -352,6 +352,12 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
         <div class="seg" id="espMetric"><button data-m="s" class="on">Siniestros</button><button data-m="f">Fallecidos</button></div>
         <button class="tbtn" id="espReset" title="Reencuadrar">⤢ Encuadre</button>
       </div>
+      <div class="maprow" id="relCtl" hidden style="margin-top:10px">
+        <span class="seglab">Altura</span><input type="range" id="relExag" min="1" max="12" value="5" step="0.5" style="width:130px;accent-color:var(--accent)">
+        <span class="num" id="relExagV" style="font-size:.8rem;color:var(--ink-mid);min-width:26px">5×</span>
+        <span class="seglab" style="margin-left:10px">Suavizado</span><input type="range" id="relBw" min="6" max="28" value="14" step="1" style="width:130px;accent-color:var(--accent)">
+        <span class="num" id="relBwV" style="font-size:.8rem;color:var(--ink-mid);min-width:30px">14 px</span>
+      </div>
       <p class="desc" id="espDesc" style="margin:10px 0 0;max-width:80ch"></p>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
@@ -848,7 +854,7 @@ $('#mainTabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
 /* ================= Vista ESPACIAL avanzada (deck.gl) ================= */
 let deckgl=null, espView={longitude:-71.3,latitude:-37,zoom:3.7,pitch:0,bearing:0};
 let superIdx=null, superKey='', lastHexRes=-1;
-const ESP={mode:'hex',metric:'s'};
+const ESP={mode:'hex',metric:'s',relExag:5,relBw:14};
 const RAMP=[[255,255,204],[255,237,160],[254,217,118],[254,178,76],[253,141,60],[252,78,42],[227,26,28],[177,0,38]];
 function rampCol(t){t=Math.max(0,Math.min(0.999,t||0));return RAMP[Math.floor(t*RAMP.length)];}
 const maxOf=(arr,f)=>{let m=1;for(const x of arr){const v=f(x);if(v>m)m=v;}return m;};
@@ -915,11 +921,11 @@ function buildRelieve(pts){
   const toLon=x=>lon0+x/W*(lon1-lon0),toLat=y=>lat1-y/H*(lat1-lat0);
   const wFatal=ESP.metric==='f',src=wFatal?pts.filter(p=>p[7]>0):pts;
   const dens=d3.contourDensity().x(p=>gx(p[1])).y(p=>gy(p[0])).weight(p=>wFatal?(p[7]||0):1)
-    .size([W,H]).bandwidth(14).thresholds(16)(src);
+    .size([W,H]).bandwidth(ESP.relBw).thresholds(16)(src);
   const maxV=Math.max(...dens.map(c=>c.value).filter(v=>v>0),1e-9),data=[];
   for(const c of dens){if(c.value<=0)continue;
     for(const poly of c.coordinates)data.push({rings:poly.map(r=>r.map(([x,y])=>[toLon(x),toLat(y)])),value:c.value});}
-  const ELEV=(lat1-lat0)*111000*0.11;
+  const ELEV=(lat1-lat0)*111000*0.022*ESP.relExag;
   $('#espFoot').textContent=`${fmt(src.length)} ${wFatal?'siniestros con fallecidos':'siniestros'} → ${data.length} terrazas de contorno KDE extruidas · más alto y rojo = mayor concentración por km² · botón derecho inclina la cámara`;
   $('#espLegend').innerHTML='<span>menos</span>'+RAMP.slice(1).map(c=>`<i style="width:20px;height:12px;display:inline-block;background:rgb(${c.join(',')})"></i>`).join('')+`<span>más</span><span style="margin-left:8px">· concentración de ${wFatal?'fallecidos':'siniestros'}</span>`;
   return new deck.PolygonLayer({id:'relieve',data,extruded:true,filled:true,stroked:false,
@@ -1007,6 +1013,7 @@ function renderEspacial(keepView){
   if(!keepView||scopeChanged)fitEspView();
   const needScope=['hex','contour','relieve','cluster','red','riesgo'].includes(ESP.mode),scoped=state.region!=null||state.comuna!=null||state.metro!=null;
   setEspDesc();
+  $('#relCtl').hidden=ESP.mode!=='relieve';   // deslizadores de altura/suavizado solo en Relieve
   if(needScope&&!scoped){$('#deckPrompt').style.display='flex';$('#espFoot').textContent='';$('#espLegend').innerHTML='';deckgl.setProps({layers:[basemapLayer()]});return;}
   $('#deckPrompt').style.display='none';
   deckgl.setProps({viewState:espView,layers:[basemapLayer()]});   // base mientras cargan los datos del territorio
@@ -1023,6 +1030,10 @@ function renderEspacial(keepView){
 $('#espMode').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#espMode').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');ESP.mode=b.dataset.e;superKey='';renderEspacial(false);});
 $('#espMetric').querySelectorAll('button').forEach(b=>b.onclick=()=>{$('#espMetric').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');ESP.metric=b.dataset.m;superKey='';renderEspacial(true);});
 $('#espReset').onclick=()=>renderEspacial(false);
+// Deslizadores de Relieve KDE 3D (altura y suavizado), con re-render debounced.
+let _relT;const scheduleRel=()=>{clearTimeout(_relT);_relT=setTimeout(()=>renderEspacial(true),130);};
+$('#relExag').oninput=function(){ESP.relExag=+this.value;$('#relExagV').textContent=this.value+'×';scheduleRel();};
+$('#relBw').oninput=function(){ESP.relBw=+this.value;$('#relBwV').textContent=this.value+' px';scheduleRel();};
 
 /* ---------- Init ---------- */
 const totalS=D.factGeo.reduce((a,r)=>a+r[4],0);
