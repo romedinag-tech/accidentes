@@ -169,6 +169,8 @@ select{background:var(--surface-alt);border:1px solid var(--line);color:var(--in
 .legend .tk{width:34px;text-align:center;font-family:var(--font-data);font-size:.66rem;color:var(--ink-lo)}
 .mapfoot{font-size:.7rem;color:var(--ink-lo);margin-top:7px}
 .chartbox{position:relative;height:250px}
+.chart-cap{font-size:.68rem;color:var(--ink-lo);margin-top:6px;font-style:italic}
+.chart-cap b{color:var(--ink-mid);font-style:normal}
 .chartbox.sm{height:210px}
 .charts2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
 @media(max-width:760px){.charts2{grid-template-columns:1fr}}
@@ -333,6 +335,10 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
     <div class="charts2">
       <div class="card"><h2><svg class="ic"><use href="#i-user"/></svg>¿Cómo participaba la persona? <span class="hint">conductor · pasajero · peatón</span></h2><p class="desc">Posición de la persona en el siniestro: si iba conduciendo, como pasajero, o a pie (peatón). No indica responsabilidad.</p><div class="chartbox sm"><canvas id="cPersRol"></canvas></div></div>
       <div class="card"><h2><svg class="ic"><use href="#i-pulse"/></svg>Fallecidos por grupo etario</h2><div class="chartbox sm"><canvas id="cPersEdadF"></canvas></div></div>
+    </div>
+    <div class="charts2">
+      <div class="card"><h2><svg class="ic"><use href="#i-percent"/></svg>Letalidad por tipo de usuario <span class="hint">normalizado por exposición</span></h2><p class="desc">De cada 100 personas accidentadas de ese tipo, cuántas fallecen. Corrige el sesgo del gráfico absoluto: peatones, ciclistas y motociclistas —mucho menos protegidos— mueren en proporción muy superior aunque sean menos en número.</p><div class="chartbox sm" style="height:260px"><canvas id="cPersUsuarioLet"></canvas></div></div>
+      <div class="card"><h2><svg class="ic"><use href="#i-percent"/></svg>Letalidad por grupo etario <span class="hint">normalizado</span></h2><p class="desc">De cada 100 accidentados de cada grupo etario, cuántos fallecen. Las personas mayores tienen una letalidad muy superior a su peso en accidentados.</p><div class="chartbox sm"><canvas id="cPersEdadLet"></canvas></div></div>
     </div>
   </div>
 
@@ -576,6 +582,29 @@ function pctLabels({horizontal=false,total=null,minShare=0}={}){
 // Inyecta datalabels de % y aire (grace) en el eje de valores, preservando el resto de opciones.
 function withPct(opts,cfg={}){opts.plugins=Object.assign({},opts.plugins,{datalabels:pctLabels(cfg)});
   const ax=cfg.horizontal?'x':'y';opts.scales=Object.assign({},opts.scales);opts.scales[ax]=Object.assign({},opts.scales[ax],{grace:'14%'});return opts;}
+// ---- Pie de figura: declara territorio + años que se resumen (visible y en la descarga) ----
+function fmtAnios(anios){const y=[...anios].map(Number).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
+  if(!y.length)return 'sin años';
+  if(y.length===1)return ''+y[0];
+  if(y[y.length-1]-y[0]===y.length-1)return y[0]+'–'+y[y.length-1];
+  return y.join(', ');}
+function figCaption(anios,{suma=true,withModo=false}={}){
+  const per=fmtAnios(anios), extra=[];
+  if(withModo&&state.modo!=null)extra.push(M.modos[state.modo].toLowerCase());
+  if(state.zona!=null)extra.push('zona '+(state.zona===0?'urbana':'rural'));
+  const sumaTxt=(suma&&[...anios].map(Number).filter(v=>!isNaN(v)).length>1)?'suma ':'';
+  return `${scopeName()} · ${sumaTxt}${per}${extra.length?' · '+extra.join(', '):''}`;}
+function setCap(id,text){const c=$('#'+id);if(!c)return;const box=c.closest('.chartbox');if(!box)return;
+  let el=box.nextElementSibling;
+  if(!el||!el.classList||!el.classList.contains('chart-cap')){el=document.createElement('div');el.className='chart-cap';box.after(el);}
+  el.textContent=text;}
+function stampCaptions(ids,anios,opts={}){const cap=figCaption(anios,opts);ids.forEach(id=>setCap(id,cap));}
+function chartCap(id){const box=$('#'+id)&&$('#'+id).closest('.chartbox');const el=box&&box.nextElementSibling;
+  return (el&&el.classList&&el.classList.contains('chart-cap'))?el.textContent:'';}
+// Etiquetas que muestran el VALOR (no el % del total) — para tasas como la letalidad.
+function valLabels({suffix='',horizontal=false}={}){return {display:ctx=>Math.abs(+ctx.dataset.data[ctx.dataIndex]||0)>0,
+  color:css('--ink-mid'),anchor:'end',align:horizontal?'right':'top',offset:3,clamp:true,clip:false,
+  font:{weight:'600',size:10},formatter:v=>fmt1(v)+suffix};}
 let charts={};
 function baseOpts(){const grid=css('--line'),tick=css('--ink-lo');
   return {responsive:true,maintainAspectRatio:false,animation:{duration:350},
@@ -625,6 +654,10 @@ function renderCharts(A){
   mk('cDia',{type:'bar',data:{labels:M.dias,datasets:[{label:'Siniestros',data:M.dias.map((_,i)=>dia.s[i+1]),backgroundColor:teal,borderRadius:4},
     {type:'line',label:'Fallecidos',data:M.dias.map((_,i)=>dia.m[i+1]),borderColor:dgr,backgroundColor:dgr,borderWidth:2,tension:.3,yAxisID:'y1'}]},
     options:{...baseOpts(),scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:tick}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
+  // Pies de figura: agregados llevan "suma <años>"; la evolución anual no (los años son el eje).
+  stampCaptions(['cModo','cTipo','cCausa','cMes','cHora','cDia'],state.anios,{suma:true,withModo:true});
+  stampCaptions(['cAnio'],state.anios,{suma:false,withModo:true});
+  setCap('cRegion','Todas las regiones de Chile · '+figCaption(state.anios,{suma:true,withModo:true}).split(' · ').slice(1).join(' · '));
 }
 window.rerenderCharts=()=>render();
 
@@ -815,6 +848,21 @@ function renderPersonas(){
   const ro=aggPers(PZ.rol,PZ.roles.length);
   const roOrd=PZ.roles.map((r,i)=>[cap(r),ro.n[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
   mkP('cPersRol',{type:'bar',data:{labels:roOrd.map(x=>x[0]),datasets:[{label:'Accidentados',data:roOrd.map(x=>x[1]),backgroundColor:acc,borderRadius:4}]},options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
+  // LETALIDAD por tipo de usuario = fallecidos ÷ accidentados de ese tipo (normaliza por exposición).
+  const letU=PZ.usuarios.map((u,i)=>[u, us.n[i]>0?us.f[i]/us.n[i]*100:0, us.n[i]]).filter(x=>x[2]>=30).sort((a,b)=>b[1]-a[1]);
+  mkP('cPersUsuarioLet',{type:'bar',data:{labels:letU.map(x=>x[0]),datasets:[{label:'Letalidad',data:letU.map(x=>x[1]),backgroundColor:dgr,borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>'Letalidad: '+fmt1(c.parsed.x)+'% · '+fmt(letU[c.dataIndex][2])+' accidentados'}},datalabels:valLabels({suffix:'%',horizontal:true})},
+      scales:{x:{grace:'16%',beginAtZero:true,grid:{color:grid},ticks:{color:tick,callback:v=>v+'%'}},y:{grid:{color:grid},ticks:{color:tick}}}}});
+  // LETALIDAD por grupo etario
+  mkP('cPersEdadLet',{type:'bar',data:{labels:PZ.catEdad,datasets:[{label:'Letalidad',data:PZ.catEdad.map((c,i)=>ed.n[i]>0?ed.f[i]/ed.n[i]*100:0),
+      backgroundColor:PZ.catEdad.map(c=>c==='Personas mayores'?dgr:acc),borderRadius:4}]},
+    options:{...baseOpts(),plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>'Letalidad: '+fmt1(c.parsed.y)+'%'}},datalabels:valLabels({suffix:'%'})},
+      scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{grace:'16%',beginAtZero:true,grid:{color:grid},ticks:{color:tick,callback:v=>v+'%'}}}}});
+  // Pies de figura de la vista Personas (años reales de la base de personas)
+  const persAnios=[...state.anios].map(Number).filter(y=>PZ.anios.includes(y));
+  stampCaptions(['cPersEdad','cPersEdadF','cPersEdadLet','cPersPir','cPersUsuario','cPersUsuarioF','cPersUsuarioLet','cPersRol'],persAnios,{suma:true,withModo:false});
 }
 let pcharts={};
 function mkP(id,cfg){if(pcharts[id])pcharts[id].destroy();pcharts[id]=new Chart($('#'+id),cfg);attachZoom(id);}
@@ -826,14 +874,19 @@ const whiteBg={id:'whiteBg',beforeDraw:c=>{const x=c.ctx;x.save();x.globalCompos
 function cloneData(d){return {labels:Array.isArray(d.labels)?d.labels.slice():d.labels,datasets:d.datasets.map(ds=>Object.assign({},ds))};}
 function openChartModal(id){const src=chartById(id);if(!src)return;
   const card=$('#'+id).closest('.card'),h2=card&&card.querySelector('h2');
-  $('#cmTitleTxt').textContent=h2?h2.innerText.trim():'Gráfico';
+  const titulo=h2?h2.innerText.trim():'Gráfico', cap=chartCap(id);
+  $('#cmTitleTxt').textContent=titulo;
   $('#chartModal').hidden=false;
   // altura explícita en px (garantizada > 0) para que el gráfico no colapse
   $('.cm-canvas').style.height=Math.max(300,Math.min((window.innerHeight||800)*0.64,620))+'px';
   if(modalChart)modalChart.destroy();
   const cfg=src.config;
-  modalChart=new Chart($('#cmCanvas'),{type:cfg.type,data:cloneData(cfg.data),
-    options:Object.assign({},cfg.options,{maintainAspectRatio:false,animation:false}),plugins:[whiteBg]});
+  // Título + subtítulo DENTRO del gráfico → quedan en el PNG exportado (territorio y años).
+  const opts=Object.assign({},cfg.options,{maintainAspectRatio:false,animation:false});
+  opts.plugins=Object.assign({},opts.plugins,{
+    title:{display:true,text:titulo,color:'#0E2338',font:{size:15,weight:'700',family:'Source Serif 4, Georgia, serif'},padding:{top:2,bottom:1}},
+    subtitle:{display:!!cap,text:cap,color:'#4A5A70',font:{size:11.5,style:'italic'},padding:{top:0,bottom:10}}});
+  modalChart=new Chart($('#cmCanvas'),{type:cfg.type,data:cloneData(cfg.data),options:opts,plugins:[whiteBg]});
   setTimeout(()=>modalChart&&modalChart.resize(),60);}
 function closeChartModal(){$('#chartModal').hidden=true;if(modalChart){modalChart.destroy();modalChart=null;}}
 $('#cmClose').onclick=closeChartModal;
