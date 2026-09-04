@@ -101,21 +101,33 @@ def topo_geojson(path, cols, tol, nd=4):
 GJ_COMUNAS = topo_geojson(f'{P}/cartografia/comunas.parquet', ['cut_com'], 0.005)
 GJ_REGIONES = topo_geojson(f'{P}/cartografia/regiones.parquet', ['cod_region'], 0.01)
 
-# ---------- Áreas metropolitanas / conurbaciones (varias comunas a la vez) ----------
+# ---------- Áreas metropolitanas / conurbaciones (definición CANÓNICA por comuna) ----------
+# NO usar el campo `area_metro` de CONASET: es una macro-zona provincial poco fiable que mete
+# comunas ajenas (Ñuble en Gran Concepción; Los Andes/San Antonio en Gran Santiago; Chiloé en
+# Puerto Montt), inflando cada metro 15-140%. Se usan las conurbaciones reales del activo
+# Red Vial de Chile (config.py AMBITOS/DASHBOARD), por cut_com.
 import collections as _col
-mt = q(f"""SELECT area_metro am, cut_com, count(*) n FROM {SRC}
-           WHERE {WHERE} AND area_metro IS NOT NULL AND cut_com IS NOT NULL
-           GROUP BY area_metro, cut_com""")
-_metros = {}
-for r in mt.itertuples():
-    if r.cut_com in com_idx:
-        _metros.setdefault(r.am, []).append(com_idx[r.cut_com])
+_METROS_CANON = [
+    ('Gran Santiago', ['13101','13102','13103','13104','13105','13106','13107','13108','13109',
+                        '13110','13111','13112','13113','13114','13115','13116','13117','13118',
+                        '13119','13120','13121','13122','13123','13124','13125','13126','13127',
+                        '13128','13129','13130','13131','13132','13201','13401','13403','13604']),
+    ('Gran Valparaíso', ['05101','05103','05109','05801','05804']),
+    ('Gran Concepción', ['08101','08102','08103','08104','08105','08106',
+                         '08107','08108','08109','08110','08111','08112']),
+    ('Coquimbo–La Serena', ['04101','04102']),
+    ('Rancagua–Machalí', ['06101','06115']),
+    ('Puerto Montt–Puerto Varas', ['10101','10109','10107']),
+    ('Iquique–Alto Hospicio', ['01101','01107']),
+]
 METROS = []
-for nombre in sorted(_metros):
-    coms = sorted(set(_metros[nombre]))
+for nombre, cuts in _METROS_CANON:
+    coms = sorted({com_idx[c] for c in cuts if c in com_idx})
+    if not coms:
+        print('  OJO metro sin comunas (revisar cut):', nombre); continue
     cod = _col.Counter(COMUNAS[ci]['cod'] for ci in coms).most_common(1)[0][0]
     METROS.append({'nombre': nombre, 'coms': coms, 'cod': int(cod)})
-print('  áreas metropolitanas:', [m['nombre'] for m in METROS])
+print('  áreas metropolitanas (canónicas):', [(m['nombre'], len(m['coms'])) for m in METROS])
 
 # ---------- Puntos individuales (para hexágonos 3D, contornos KDE y clústeres) ----------
 # Compacto: [lat, lon, año-offset, cod_region, modoIdx, tipoIdx, zona, fallecidos]
