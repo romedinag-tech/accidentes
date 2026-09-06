@@ -74,4 +74,9 @@ python scripts/convertir_personas.py     # -> data/parquet/personas.parquet
 python scripts/segmentar_red_vial.py     # accidentes -> tramos de Red Vial Nacional (linear referencing)
 python scripts/riesgo_hexagonal.py       # -> data/riesgo/<cod>.json (riesgo H3 x poblacion Censo 2024)
 python procesar_accidentes.py            # -> data_bundle.js + data/puntos|redvial/<cod>.json
+
+# Base O.S.2 de Carabineros (2010-2025, historico, SEPARADO de CONASET) -- ver data/OS2/FUENTE.md
+python scripts/convertir_os2.py          # 48 Excel -> 3 parquets canonicos + os2.duckdb
+python scripts/geocodificar_os2.py       # geocodifica siniestros con Red Vial detallada (solo lectura)
+                                         #   -> os2_siniestros_geo.parquet (78%, 100% en comuna)
 ```
