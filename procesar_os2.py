@@ -243,12 +243,13 @@ if h3 is not None:
     Sg['reg'] = Sg['cut_com'].str[:2]
     Sg['h3'] = [h3.latlng_to_cell(la, lo, 8) for la, lo in zip(Sg['lat'], Sg['lon'])]
     for reg_cod, sub in Sg.groupby('reg'):
-        hg = sub.groupby('h3').agg(n=('id_accidente', 'size'), f=('fallecidos', 'sum')).reset_index()
+        hg = sub.groupby('h3').agg(n=('id_accidente', 'size'), f=('fallecidos', 'sum'),
+                                   cut=('cut_com', lambda s: s.mode().iloc[0])).reset_index()  # comuna dominante del hex
         hg = hg[hg['n'] >= 2]
         arr = []
         for r in hg.itertuples():
             b = h3.cell_to_boundary(r.h3)
-            arr.append([[[round(p[1], 5), round(p[0], 5)] for p in b], int(r.n), int(r.f)])
+            arr.append([[[round(p[1], 5), round(p[0], 5)] for p in b], int(r.n), int(r.f), r.cut])
         json.dump(arr, open(os.path.join(PUB, f'{reg_cod}.json'), 'w', encoding='utf-8'), separators=(',', ':'))
         DENS_REG[reg_cod] = len(arr)
     print(f'  densidad hex: {sum(DENS_REG.values()):,} celdas en {len(DENS_REG)} regiones -> data/os2hex/<reg>.json')
