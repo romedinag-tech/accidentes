@@ -424,8 +424,16 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 
   <div id="os2Espacial" hidden>
     <div class="card" style="padding:14px 16px 10px">
-      <h2><svg class="ic"><use href="#i-map"/></svg>Densidad de siniestros <span class="hint">hexágonos H3</span></h2>
-      <p class="desc">El 78% de los siniestros O.S.2 geolocalizados (con la Red Vial de Chile), agregados a hexágono — nunca puntos individuales. La intensidad marca la densidad.</p>
+      <h2><svg class="ic"><use href="#i-map"/></svg>Densidad de siniestros por modo <span class="hint">hexágonos H3</span></h2>
+      <p class="desc">El 78% de los siniestros O.S.2 geolocalizados (con la Red Vial de Chile), agregados a hexágono — nunca puntos individuales. Elige un modo para ver cómo se distribuye en el territorio; la intensidad marca su densidad.</p>
+      <div class="maprow" style="margin-bottom:10px">
+        <span class="seglab">Vista</span>
+        <div class="seg" id="os2MapView"><button data-v="heat" class="on">Mapa de calor</button><button data-v="hex">Hexágonos</button></div>
+        <span class="seglab" style="margin-left:6px">Modo</span>
+        <select id="os2MapModo" style="min-width:150px"></select>
+        <span class="seglab" style="margin-left:6px">Escala</span>
+        <div class="seg" id="os2MapEsc"><button data-e="rel" class="on">Relativa al modo</button><button data-e="abs">Absoluta</button></div>
+      </div>
       <div id="os2map" style="height:560px;border-radius:12px;overflow:hidden;border:1px solid var(--line)"></div>
       <div class="mapfoot" id="os2mapNote" style="margin-top:8px"></div>
     </div>
@@ -457,6 +465,10 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 const D=window.DATA, M=D.meta;
 const OS2=window.OS2||null, OS2M=OS2?OS2.meta:null;
 const $=s=>document.querySelector(s);
+// leaflet.heat lanza getImageData(0) cuando su canvas queda 0px (contenedor oculto/en transición).
+// Es benigno y solo ocurre en ese borde; se silencia SOLO ese mensaje, sin ocultar otros errores.
+addEventListener('unhandledrejection',e=>{if(/getImageData/.test((e.reason&&e.reason.message)||''))e.preventDefault();});
+addEventListener('error',e=>{if(/getImageData/.test(e.message||''))e.preventDefault();});
 const fmt=n=>(n==null||isNaN(n))?'–':Math.round(n).toLocaleString('es-CL');
 const fmt1=n=>(n==null||isNaN(n))?'–':n.toLocaleString('es-CL',{maximumFractionDigits:1});
 const regName=c=>(M.regiones.find(r=>r.cod===c)||{}).nombre||'—';
@@ -1095,31 +1107,73 @@ function renderOS2Pers(){
       scales:{x:{stacked:true,grid:{display:false},ticks:{color:tick}},y:{stacked:true,beginAtZero:true,grid:{color:grid},ticks:{color:tick}}}}});
   os2Stamp(['cPirO','cUsuO','cCondO']);
 }
-let os2map=null,os2HexLayer=null,os2LoadedKey='__';
+// Cell O.S.2 hex = [boundary, cut, n_total, f_total, [conteos por modo (orden MODOS_SEV)]]
+let os2map=null,os2HexLayer=null,os2HeatLayer=null,os2BaseLight=null,os2BaseDark=null;
+let os2LoadedKey='__',os2Cells=[],os2MapModo=-1,os2MapEsc='rel',os2MapView='heat',os2EspInit=false;
+const OS2_LIGHT='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const OS2_DARK='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+function os2SetBase(){if(!os2map)return;const want=os2MapView==='heat'?os2BaseDark:os2BaseLight,other=os2MapView==='heat'?os2BaseLight:os2BaseDark;
+  if(other&&os2map.hasLayer(other))os2map.removeLayer(other);if(want&&!os2map.hasLayer(want))want.addTo(os2map);}
+function os2InitEspControls(){
+  if(os2EspInit||!OS2)return;os2EspInit=true;
+  const sel=$('#os2MapModo');
+  sel.innerHTML='<option value="-1">Todos los modos</option>'+OS2M.modosSev.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+  sel.onchange=()=>{os2MapModo=+sel.value;os2DrawMap();};
+  $('#os2MapEsc').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    $('#os2MapEsc').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    os2MapEsc=b.dataset.e;os2DrawMap();});
+  $('#os2MapView').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    $('#os2MapView').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    os2MapView=b.dataset.v;os2SetBase();os2DrawMap();});
+}
+function os2DrawMap(){
+  if(!os2map)return;
+  os2map.invalidateSize(false);
+  if(os2HexLayer){os2map.removeLayer(os2HexLayer);os2HexLayer=null;}
+  if(os2HeatLayer){os2map.removeLayer(os2HeatLayer);os2HeatLayer=null;}
+  const mi=os2MapModo, val=c=>mi<0?c[2]:(c[4][mi]||0);
+  const cells=os2Cells.filter(c=>val(c)>0);
+  const modoLab=mi<0?'Todos los modos':OS2M.modosSev[mi];
+  if(!cells.length){$('#os2mapNote').innerHTML=`Sin siniestros de <b>${modoLab.toLowerCase()}</b> geolocalizados en ${scopeName()}.`;return;}
+  const mx=os2MapEsc==='abs'?Math.max(1,...os2Cells.map(c=>c[2])):Math.max(1,...cells.map(val));
+  const cen=c=>{const b=c[0];let x=0,y=0;for(const p of b){x+=p[0];y+=p[1];}return [y/b.length,x/b.length];};
+  if(os2MapView==='heat'){
+    const sz=os2map.getSize();
+    if(sz.x<20||sz.y<20){setTimeout(os2DrawMap,140);return;}   // mapa aún sin tamaño (vista recién mostrada)
+    const pts=cells.map(c=>{const q=cen(c);return [q[0],q[1],val(c)];});
+    try{os2map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])),{padding:[24,24]});}catch(e){}
+    try{
+      os2HeatLayer=L.heatLayer(pts,{radius:24,blur:20,max:mx,minOpacity:.30,maxZoom:15}).addTo(os2map);
+      if(os2HeatLayer._heat){const _dr=os2HeatLayer._heat.draw.bind(os2HeatLayer._heat);   // blinda el draw (getImageData revienta con canvas 0px)
+        os2HeatLayer._heat.draw=function(mo){const s=os2map.getSize();if(s.x<20||s.y<20)return;try{return _dr(mo);}catch(e){}};}
+    }catch(e){setTimeout(os2DrawMap,160);return;}
+  }else{
+    const feats=cells.map(c=>({type:'Feature',properties:{v:val(c),n:c[2],f:c[3]},geometry:{type:'Polygon',coordinates:[c[0]]}}));
+    os2HexLayer=L.geoJSON({type:'FeatureCollection',features:feats},{style:f=>{const t=Math.sqrt(f.properties.v/mx);
+      return{stroke:false,fillColor:`rgba(178,24,43,${(.1+.72*Math.min(1,t)).toFixed(2)})`,fillOpacity:.72};},
+      onEachFeature:(f,l)=>l.bindTooltip(mi<0?`${f.properties.n} siniestros · ${f.properties.f} fallecidos`:`${modoLab}: ${f.properties.v} · ${f.properties.n} en total`)}).addTo(os2map);
+    try{os2map.fitBounds(os2HexLayer.getBounds(),{padding:[20,20]});}catch(e){}
+  }
+  $('#os2mapNote').innerHTML=`<b>${fmt(cells.length)}</b> hexágonos con <b>${modoLab.toLowerCase()}</b> · ${scopeName()} · ${os2MapView==='heat'?'mapa de calor':'hexágonos'} · escala ${os2MapEsc==='abs'?'absoluta (comparable entre modos)':'relativa al modo'} · 78% geolocalizado, agregado.`;
+}
 function renderOS2Esp(){
+  os2InitEspControls();
   if(!os2map){os2map=L.map('os2map',{zoomControl:true,attributionControl:false}).setView([-33.45,-70.66],5);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:18}).addTo(os2map);}
+    os2BaseLight=L.tileLayer(OS2_LIGHT,{maxZoom:18});os2BaseDark=L.tileLayer(OS2_DARK,{maxZoom:18});os2SetBase();}
   setTimeout(()=>os2map.invalidateSize(),60);
   const cods=scopeRegions();
-  if(!cods.length){if(os2HexLayer){os2map.removeLayer(os2HexLayer);os2HexLayer=null;}os2LoadedKey='__';
+  if(!cods.length){if(os2HexLayer){os2map.removeLayer(os2HexLayer);os2HexLayer=null;}if(os2HeatLayer){os2map.removeLayer(os2HeatLayer);os2HeatLayer=null;}os2LoadedKey='__';os2Cells=[];
     $('#os2mapNote').innerHTML='A nivel país hay demasiados hexágonos. Elige una <b>región</b> o <b>ciudad</b> arriba para ver la concentración.';return;}
-  // clave incluye el ámbito exacto (comuna/metro filtran dentro de la región)
   const scope=os2ScopeSet();
   const scopeCuts=(state.comuna!=null||state.metro!=null)&&scope?new Set([...scope].map(i=>OS2.comunas[i].cut)):null;
   const key=cods.join(',')+'|'+(scopeCuts?[...scopeCuts].join(','):'reg');
-  if(key===os2LoadedKey)return;os2LoadedKey=key;
+  if(key===os2LoadedKey){os2DrawMap();return;}   // ámbito sin cambios -> solo redibuja (pudo cambiar modo/vista)
+  os2LoadedKey=key;
   $('#os2mapNote').textContent='Cargando densidad…';
-  Promise.all(cods.map(c=>fetch(`data/os2hex/${String(c).padStart(2,'0')}.json?v=2`).then(r=>r.ok?r.json():[]).catch(()=>[]))).then(parts=>{
-    if(os2HexLayer){os2map.removeLayer(os2HexLayer);os2HexLayer=null;}
+  Promise.all(cods.map(c=>fetch(`data/os2hex/${String(c).padStart(2,'0')}.json?v=3`).then(r=>r.ok?r.json():[]).catch(()=>[]))).then(parts=>{
     let cells=[].concat(...parts);
-    if(scopeCuts)cells=cells.filter(c=>scopeCuts.has(c[3]));   // solo hexágonos de las comunas del ámbito
-    const mx=Math.max(1,...cells.map(c=>c[1]));
-    const feats=cells.map(c=>({type:'Feature',properties:{n:c[1],f:c[2]},geometry:{type:'Polygon',coordinates:[c[0]]}}));
-    os2HexLayer=L.geoJSON({type:'FeatureCollection',features:feats},{style:f=>{const t=Math.sqrt(f.properties.n/mx);
-      return{stroke:false,fillColor:`rgba(178,24,43,${(.12+.7*t).toFixed(2)})`,fillOpacity:.72};},
-      onEachFeature:(f,l)=>l.bindTooltip(`${f.properties.n} siniestros · ${f.properties.f} fallecidos`)}).addTo(os2map);
-    try{os2map.fitBounds(os2HexLayer.getBounds(),{padding:[20,20]});}catch(e){}
-    $('#os2mapNote').innerHTML=`<b>${fmt(cells.length)}</b> hexágonos (H3 ~0,7 km²) con 2+ siniestros · ${scopeName()} · 78% geolocalizado, agregado — nunca puntos individuales.`;
+    if(scopeCuts)cells=cells.filter(c=>scopeCuts.has(c[1]));   // solo hexágonos de las comunas del ámbito
+    os2Cells=cells;os2DrawMap();
   });
 }
 
@@ -1138,6 +1192,8 @@ function showViews(){
   const os2=state.source==='os2';
   $('#viewSiniestros').hidden=os2||!sin;$('#viewPersonas').hidden=os2||!pers;$('#viewEspacial').hidden=os2||!esp;
   $('#os2Siniestros').hidden=!os2||!sin;$('#os2Personas').hidden=!os2||!pers;$('#os2Espacial').hidden=!os2||!esp;
+  // El heatmap (canvas) revienta si redibuja con el contenedor oculto (0px) -> se retira al salir del espacial O.S.2
+  if(os2HeatLayer&&!(os2&&esp)&&os2map){os2map.removeLayer(os2HeatLayer);os2HeatLayer=null;os2LoadedKey='__';}
   $('#fgComuna').style.display='';
   $('#fgModo').style.display=(os2||pers)?'none':'';
   $('#fgZona').style.display=os2?'none':'';

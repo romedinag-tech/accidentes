@@ -236,23 +236,36 @@ g = A(cond, ['cut_com', 'anio', 'br', 'sx'], {'n': ('edad', 'size')})
 PERS_COND = [[com_idx[r.cut_com], int(r.anio), br_idx[r.br], sx_idx[r.sx], int(r.n)] for r in g.itertuples()]
 print(f'  personas: {len(Pv):,} · piramide={len(PERS_PIR)} usuario={len(PERS_CAL)} conductores={len(PERS_COND)}')
 
-# ---------- densidad geocodificada: hex H3 res-8 por región (lazy) ----------
+# ---------- densidad geocodificada: hex H3 res-8 por región y POR MODO (lazy) ----------
+# Cada celda = [boundary, cut_com, n_total, f_total, [conteos por modo]] (orden de MODOS_SEV).
+# Un siniestro cuenta en cada modo que involucra (peatón vía atropello) -> permite ver la
+# distribución espacial de cada modo por separado en el dashboard.
 DENS_REG = {}
 if h3 is not None:
-    Sg = Sv[Sv['lat'].notna()].copy()
+    NMS = len(MODOS_SEV)
+    Sg = Sv[Sv['lat'].notna()][['id_accidente', 'anio', 'cut_com', 'lat', 'lon', 'fallecidos']].copy()
     Sg['reg'] = Sg['cut_com'].str[:2]
     Sg['h3'] = [h3.latlng_to_cell(la, lo, 8) for la, lo in zip(Sg['lat'], Sg['lon'])]
+    # conteo por hex × modo (vm = modo-por-siniestro con Peatón, del bloque de vehículos)
+    vmi = vm.copy(); vmi['moi'] = vmi['modo'].map(ms_idx)
+    Sgm = Sg[['id_accidente', 'anio', 'reg', 'h3']].merge(
+        vmi[['id_accidente', 'anio', 'moi']].dropna(), on=['id_accidente', 'anio'], how='inner')
+    modecnt = Sgm.groupby(['reg', 'h3', 'moi']).size().reset_index(name='c')
+    modemap = {}
+    for r in modecnt.itertuples():
+        modemap.setdefault((r.reg, r.h3), [0] * NMS)[int(r.moi)] = int(r.c)
     for reg_cod, sub in Sg.groupby('reg'):
         hg = sub.groupby('h3').agg(n=('id_accidente', 'size'), f=('fallecidos', 'sum'),
-                                   cut=('cut_com', lambda s: s.mode().iloc[0])).reset_index()  # comuna dominante del hex
+                                   cut=('cut_com', lambda s: s.mode().iloc[0])).reset_index()
         hg = hg[hg['n'] >= 2]
         arr = []
         for r in hg.itertuples():
             b = h3.cell_to_boundary(r.h3)
-            arr.append([[[round(p[1], 5), round(p[0], 5)] for p in b], int(r.n), int(r.f), r.cut])
+            counts = modemap.get((reg_cod, r.h3), [0] * NMS)
+            arr.append([[[round(p[1], 5), round(p[0], 5)] for p in b], r.cut, int(r.n), int(r.f), counts])
         json.dump(arr, open(os.path.join(PUB, f'{reg_cod}.json'), 'w', encoding='utf-8'), separators=(',', ':'))
         DENS_REG[reg_cod] = len(arr)
-    print(f'  densidad hex: {sum(DENS_REG.values()):,} celdas en {len(DENS_REG)} regiones -> data/os2hex/<reg>.json')
+    print(f'  densidad hex: {sum(DENS_REG.values()):,} celdas × {NMS} modos en {len(DENS_REG)} regiones -> data/os2hex/<reg>.json')
 
 # ---------- bundle ----------
 OS2DATA = {
