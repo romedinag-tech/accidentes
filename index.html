@@ -404,6 +404,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
       <div class="card"><h2><svg class="ic"><use href="#i-car"/></svg>Modo involucrado</h2><p class="desc">Vehículos y usuarios que participan (un siniestro puede involucrar varios modos).</p><div class="chartbox sm"><canvas id="cModoO"></canvas></div></div>
       <div class="card"><h2><svg class="ic"><use href="#i-percent"/></svg>Letalidad por modo <span class="hint">normalizada</span></h2><p class="desc">De cada 100 siniestros con ese modo, cuántos dejan al menos un fallecido. Peatones y motociclistas —sin protección— y camiones —por su masa— encabezan.</p><div class="chartbox sm"><canvas id="cLetO"></canvas></div></div>
     </div>
+    <div class="card" style="margin-bottom:14px"><h2><svg class="ic"><use href="#i-percent"/></svg>Letalidad urbana vs. rural por modo <span class="hint">el hallazgo clave</span></h2><p class="desc">De cada 100 siniestros con ese modo, cuántos dejan un fallecido, separando zona urbana y rural. El castigo rural es sistémico: todos los modos son mucho más letales en la ruta (mayor velocidad y más distancia a atención de trauma). Responde al territorio elegido arriba. <span class="hint">Nota: la letalidad rural puede estar algo inflada porque el siniestro leve rural se reporta menos.</span></p><div class="chartbox" style="height:340px"><canvas id="cLetSecO"></canvas></div></div>
     <div class="charts2">
       <div class="card"><h2><svg class="ic"><use href="#i-car"/></svg>Tipo de vehículo</h2><p class="desc">Parque involucrado en siniestros, por tipo — dato que CONASET no publica.</p><div class="chartbox sm"><canvas id="cVehO"></canvas></div></div>
       <div class="card"><h2><svg class="ic"><use href="#i-pulse"/></svg>Dado a la fuga</h2><p class="desc">Vehículos que se dieron a la fuga tras el siniestro.</p><div class="chartbox sm"><canvas id="cFugaO"></canvas></div></div>
@@ -1037,6 +1038,22 @@ function os2Let(){const sec=os2Sec.cLetO,dgr=css('--red'),orC=css('--or'),navy=c
     options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Letalidad: '+fmt1(c.parsed.x)+'% · '+fmt(ml[c.dataIndex].n)+' siniestros'}},datalabels:valLabels({suffix:'%',horizontal:true})},
       scales:{x:{beginAtZero:true,grace:'12%',grid:{color:grid},ticks:{color:tick,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:tick}}}}});
   setCap('cLetO',os2Cap()+secTag(sec));}
+function os2LetSec(){ // letalidad urbana vs rural por modo, lado a lado (siempre las dos zonas)
+  const NM=OS2M.modosSev.length,uN=new Array(NM).fill(0),uF=new Array(NM).fill(0),rN=new Array(NM).fill(0),rF=new Array(NM).fill(0);
+  const S=os2ScopeSet();
+  for(const r of OS2.factModo){if((S===null||S.has(r[0]))&&state.anios.has(r[1])){
+    if(r[2]===0){uN[r[3]]+=r[4];uF[r[3]]+=r[5];}else{rN[r[3]]+=r[4];rF[r[3]]+=r[5];}}}
+  const rows=OS2M.modosSev.map((m,i)=>({m,urb:uN[i]?100*uF[i]/uN[i]:0,rur:rN[i]?100*rF[i]/rN[i]:0,un:uN[i],rn:rN[i]}))
+    .filter(x=>x.un+x.rn>0).sort((a,b)=>b.rur-a.rur);
+  mk('cLetSecO',{type:'bar',data:{labels:rows.map(x=>x.m),datasets:[
+    {label:'Urbano',data:rows.map(x=>x.urb),backgroundColor:css('--navy'),borderRadius:3},
+    {label:'Rural',data:rows.map(x=>x.rur),backgroundColor:css('--red'),borderRadius:3}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:true,position:'bottom',labels:{color:css('--ink-lo')}},
+      tooltip:{callbacks:{label:c=>{const x=rows[c.dataIndex],u=c.datasetIndex===0;return (u?'Urbano':'Rural')+': '+fmt1(c.parsed.x)+'% · '+fmt(u?x.un:x.rn)+' siniestros';}}},
+      datalabels:valLabels({suffix:'%',horizontal:true})},
+      scales:{x:{beginAtZero:true,grace:'14%',grid:{color:css('--line')},ticks:{color:css('--ink-lo'),callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:css('--ink-lo')}}}}});
+  setCap('cLetSecO',os2Cap());
+}
 function os2Veh(){const sec=os2Sec.cVehO,NV=OS2M.modos.length,vN=new Array(NV).fill(0);
   oAggS(OS2.factVeh,sec,r=>{vN[r[3]]+=r[4];});
   const vo=OS2M.modos.map((m,i)=>[m,vN[i]]).sort((a,b)=>b[1]-a[1]);
@@ -1091,7 +1108,7 @@ function renderOS2Sin(){
   os2Stamp(['cSerieO','cSectorO','cFugaO','cRankO']);
   // gráficos con selector Total / Urbano / Rural (comportamiento por zona)
   os2SecCtrl('cTipoO',os2Tipo); os2SecCtrl('cModoO',os2Modo); os2SecCtrl('cLetO',os2Let); os2SecCtrl('cVehO',os2Veh); os2SecCtrl('cCausaO',os2Causa);
-  os2Tipo(); os2Modo(); os2Let(); os2Veh(); os2Causa();
+  os2Tipo(); os2Modo(); os2Let(); os2LetSec(); os2Veh(); os2Causa();
 }
 function renderOS2Rank(){
   const tick=css('--ink-lo'),grid=css('--line');
