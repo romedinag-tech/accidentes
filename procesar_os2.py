@@ -165,9 +165,9 @@ g = A(Sv[Sv['sectorN'].notna()], ['cut_com', 'anio', 'sectorN', 'tipoN'],
       {'n': ('id_accidente', 'size'), 'f': ('fallecidos', 'sum'), 'gr': ('graves', 'sum'), 'le': ('lesionados', 'sum')})
 FACT_SIN = [[com_idx[r.cut_com], int(r.anio), se_idx[r.sectorN], ti_idx[r.tipoN],
              int(r.n), int(r.f), int(r.gr), int(r.le)] for r in g.itertuples()]
-# factCausa: [comIdx, anio, causaIdx, n, fall]
-g = A(Sv, ['cut_com', 'anio', 'causaN'], {'n': ('id_accidente', 'size'), 'f': ('fallecidos', 'sum')})
-FACT_CAUSA = [[com_idx[r.cut_com], int(r.anio), ca_idx[r.causaN], int(r.n), int(r.f)] for r in g.itertuples()]
+# factCausa: [comIdx, anio, sectorIdx, causaIdx, n, fall]
+g = A(Sv[Sv['sectorN'].notna()], ['cut_com', 'anio', 'sectorN', 'causaN'], {'n': ('id_accidente', 'size'), 'f': ('fallecidos', 'sum')})
+FACT_CAUSA = [[com_idx[r.cut_com], int(r.anio), se_idx[r.sectorN], ca_idx[r.causaN], int(r.n), int(r.f)] for r in g.itertuples()]
 
 print(f'  siniestros validos: {len(Sv):,} · factSin={len(FACT_SIN)} factCausa={len(FACT_CAUSA)}')
 
@@ -181,12 +181,10 @@ V['fuga'] = (V['tipo'].map(nc).str.contains('DADO A LA FUGA') | V['servicio'].ma
 MODOS = ['Automóvil', 'Camioneta', 'Motocicleta', 'Bicicleta', 'Bus', 'Camión', 'Otro']
 mo_idx = {m: i for i, m in enumerate(MODOS)}
 Vv = V[V['cut_com'].isin(com_idx.keys())].copy()
-# factVeh: [comIdx, anio, modoIdx, n]  (n = vehículos de ese modo)
-g = A(Vv[Vv['modo'].notna()], ['cut_com', 'anio', 'modo'], {'n': ('id_accidente', 'size')})
-FACT_VEH = [[com_idx[r.cut_com], int(r.anio), mo_idx[r.modo], int(r.n)] for r in g.itertuples()]
 
-# modo POR SINIESTRO (para severidad por modo): un siniestro cuenta en cada modo involucrado
-sev = Sv[['id_accidente', 'anio', 'cut_com', 'fallecidos', 'lesionados']].copy()
+# modo POR SINIESTRO (para severidad por modo): un siniestro cuenta en cada modo involucrado.
+# Keyed por sectorIdx (urbano/rural) para poder separar el comportamiento por zona en el dashboard.
+sev = Sv[['id_accidente', 'anio', 'cut_com', 'sectorN', 'fallecidos', 'lesionados']].copy()
 vm = Vv[Vv['modo'].notna()][['id_accidente', 'anio', 'modo']].drop_duplicates()
 # atropello -> Peatón como modo-víctima
 atro = Sv[Sv['tipoN'] == 'Atropello'][['id_accidente', 'anio']].copy(); atro['modo'] = 'Peatón'
@@ -194,9 +192,14 @@ vm = pd.concat([vm, atro], ignore_index=True)
 sm = sev.merge(vm, on=['id_accidente', 'anio'], how='inner')
 MODOS_SEV = MODOS + ['Peatón']
 ms_idx = {m: i for i, m in enumerate(MODOS_SEV)}
-g = A(sm, ['cut_com', 'anio', 'modo'], {'n': ('id_accidente', 'size'), 'f': ('fallecidos', 'sum'), 'le': ('lesionados', 'sum')})
-FACT_MODO = [[com_idx[r.cut_com], int(r.anio), ms_idx[r.modo], int(r.n), int(r.f), int(r.le)]
+g = A(sm[sm['sectorN'].notna()], ['cut_com', 'anio', 'sectorN', 'modo'],
+      {'n': ('id_accidente', 'size'), 'f': ('fallecidos', 'sum'), 'le': ('lesionados', 'sum')})
+FACT_MODO = [[com_idx[r.cut_com], int(r.anio), se_idx[r.sectorN], ms_idx[r.modo], int(r.n), int(r.f), int(r.le)]
              for r in g.itertuples() if r.cut_com in com_idx and r.modo in ms_idx]
+# tipo de vehículo por sector: [comIdx, anio, sectorIdx, modoIdx, n]  (sector viene del siniestro)
+Vs = Vv[Vv['modo'].notna()].merge(Sv[['id_accidente', 'anio', 'sectorN']], on=['id_accidente', 'anio'], how='left')
+g = A(Vs[Vs['sectorN'].notna()], ['cut_com', 'anio', 'sectorN', 'modo'], {'n': ('id_accidente', 'size')})
+FACT_VEH = [[com_idx[r.cut_com], int(r.anio), se_idx[r.sectorN], mo_idx[r.modo], int(r.n)] for r in g.itertuples()]
 # fuga por comuna×año: [comIdx, anio, n_fuga, n_veh]
 gf = A(Vv, ['cut_com', 'anio'], {'nv': ('id_accidente', 'size'), 'nfu': ('fuga', 'sum')})
 FACT_FUGA = [[com_idx[r.cut_com], int(r.anio), int(r.nfu), int(r.nv)] for r in gf.itertuples()]

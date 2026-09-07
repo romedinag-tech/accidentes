@@ -55,18 +55,19 @@ FACT_GEO = [[com_idx[r.cut_com], int(r.anio), int(r.modo), int(r.zona), int(r.s)
             for r in fg.itertuples() if r.cut_com in com_idx and pd.notna(r.modo)]
 
 def dim_modo(dim_sql, use_causa=False, use_tipo=False):
-    if use_causa: sel = f"cod_region, anio, {MODO} modo, coalesce(causa,'SIN DATO') d"; grp = f"cod_region, anio, {MODO}, coalesce(causa,'SIN DATO')"
-    elif use_tipo: sel = f"cod_region, anio, {MODO} modo, coalesce(tipo,'SIN DATO') d"; grp = f"cod_region, anio, {MODO}, coalesce(tipo,'SIN DATO')"
-    else: sel = f"cod_region, anio, {MODO} modo, {dim_sql} d"; grp = f"cod_region, anio, {MODO}, {dim_sql}"
+    # keyed también por ZONA (urbano/rural) -> permite separar el comportamiento por zona por figura
+    if use_causa: sel = f"cod_region, anio, {MODO} modo, {ZONA} zona, coalesce(causa,'SIN DATO') d"; grp = f"cod_region, anio, {MODO}, {ZONA}, coalesce(causa,'SIN DATO')"
+    elif use_tipo: sel = f"cod_region, anio, {MODO} modo, {ZONA} zona, coalesce(tipo,'SIN DATO') d"; grp = f"cod_region, anio, {MODO}, {ZONA}, coalesce(tipo,'SIN DATO')"
+    else: sel = f"cod_region, anio, {MODO} modo, {ZONA} zona, {dim_sql} d"; grp = f"cod_region, anio, {MODO}, {ZONA}, {dim_sql}"
     df = metrics(sel, grp, full=False)
     out = []
     for r in df.itertuples():
-        if pd.isna(r.modo): continue
+        if pd.isna(r.modo) or pd.isna(r.zona): continue
         d = r.d
         if use_causa: d = causa_idx.get(r.d, 0)
         elif use_tipo: d = tipo_idx.get(r.d, 0)
         elif pd.isna(d): continue
-        out.append([int(r.cod_region), int(r.anio), int(r.modo), int(d), int(r.s), int(r.m or 0)])
+        out.append([int(r.cod_region), int(r.anio), int(r.modo), int(r.zona), int(d), int(r.s), int(r.m or 0)])
     return out
 
 FACT_TIPO = dim_modo(None, use_tipo=True)

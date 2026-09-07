@@ -459,8 +459,8 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
   </div>
 </div>
 
-<script src="data_bundle.js?v=10"></script>
-<script src="os2_bundle.js?v=2"></script>
+<script src="data_bundle.js?v=11"></script>
+<script src="os2_bundle.js?v=3"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const OS2=window.OS2||null, OS2M=OS2?OS2.meta:null;
@@ -567,10 +567,26 @@ function aggRegionNat(){const m=new Map();
     const cod=D.comunas[ci].cod;m.set(cod,(m.get(cod)||0)+s);}
   return m;
 }
-// facts secundarios keyed [cod_region, anio, modo, dim, s, m] — filtran año/región/modo
-function aggDim(fact,size){const arr=new Array(size).fill(0),arrM=new Array(size).fill(0);
-  for(const [cod,an,mo,d,s,m] of fact){if(!anioOk(an)||!modoOk(mo))continue;if(state.region!=null&&cod!==state.region)continue;arr[d]+=s;arrM[d]+=m;}
+// facts secundarios keyed [cod_region, anio, modo, ZONA, dim, s, m] — filtran año/región/modo (+ sector opcional)
+function aggDim(fact,size,sec){const arr=new Array(size).fill(0),arrM=new Array(size).fill(0);
+  for(const [cod,an,mo,zo,d,s,m] of fact){if(!anioOk(an)||!modoOk(mo))continue;if(state.region!=null&&cod!==state.region)continue;
+    if(sec!=null&&sec>=0&&zo!==sec)continue;
+    arr[d]+=s;arrM[d]+=m;}
   return {s:arr,m:arrM};}
+// modo (desde factGeo, que trae zona) con sector opcional por figura
+function aggModoSec(sec){const arr=new Array(M.modos.length).fill(0);
+  for(const [ci,an,mo,zo,s] of D.factGeo){if(!anioOk(an)||!modoOk(mo)||!inScope(ci))continue;if(sec!=null&&sec>=0&&zo!==sec)continue;arr[mo]+=s;}
+  return arr;}
+// selector por figura Total/Urbano/Rural para gráficos CONASET
+const conSec={cModo:-1,cTipo:-1,cCausa:-1,cHora:-1,cDia:-1};
+function conSecTag(sec){return sec<0?'':(sec===0?' · zona urbana':' · zona rural');}
+function conSecCtrl(chartId,fn){
+  const card=$('#'+chartId)&&$('#'+chartId).closest('.card');if(!card||card.querySelector('.sectoggle'))return;
+  const box=document.createElement('div');box.className='seg sectoggle';box.style.cssText='margin:0 0 9px;font-size:.74rem';
+  box.innerHTML=[['Total',-1],['Urbano',0],['Rural',1]].map(([t,v])=>`<button data-s="${v}" class="${v===conSec[chartId]?'on':''}">${t}</button>`).join('');
+  const h2=card.querySelector('h2'),desc=card.querySelector('.desc');(desc||h2).after(box);
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{box.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');conSec[chartId]=+b.dataset.s;fn();});
+}
 
 /* ---------- KPIs ---------- */
 function renderKpis(A){
@@ -676,6 +692,30 @@ function baseOpts(){const grid=css('--line'),tick=css('--ink-lo');
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y??c.parsed.x)}}},
     scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{grid:{color:grid},ticks:{color:tick},beginAtZero:true}}};}
 function mk(id,cfg){if(charts[id])charts[id].destroy();charts[id]=new Chart($('#'+id),cfg);attachZoom(id);}
+// Renderizadores CONASET con selector Total/Urbano/Rural por figura
+function conCapCommon(sec){return figCaption(state.anios,{suma:true,withModo:true})+conSecTag(sec);}
+function conModo(){const sec=conSec.cModo,porModo=aggModoSec(sec);
+  mk('cModo',{type:'bar',data:{labels:M.modos,datasets:[{label:'Siniestros',data:porModo,backgroundColor:M.modos.map((_,i)=>PAL_M[i]),borderRadius:5}]},
+    options:withPct({...baseOpts(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.y)}}}},{horizontal:false})});
+  setCap('cModo',conCapCommon(sec));}
+function conTipo(){const sec=conSec.cTipo,tD=aggDim(D.factTipo,M.tipos.length,sec);
+  const ti=M.tipos.map((t,i)=>[cap(t),tD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  mk('cTipo',{type:'bar',data:{labels:ti.map(x=>x[0]),datasets:[{label:'Siniestros',data:ti.map(x=>x[1]),backgroundColor:css('--teal'),borderRadius:4}]},
+    options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
+  setCap('cTipo',conCapCommon(sec));}
+function conCausa(){const sec=conSec.cCausa,cD=aggDim(D.factCausa,M.causas.length,sec);
+  const ci=M.causas.map((c,i)=>[cap(c),cD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mk('cCausa',{type:'bar',data:{labels:ci.map(x=>x[0]),datasets:[{label:'Siniestros',data:ci.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
+    options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
+  setCap('cCausa',conCapCommon(sec));}
+function conHora(){const sec=conSec.cHora,hora=aggDim(D.factHora,24,sec);
+  mk('cHora',{type:'bar',data:{labels:[...Array(24).keys()].map(h=>h+'h'),datasets:[{label:'Siniestros',data:hora.s,backgroundColor:css('--accent'),borderRadius:3}]},options:baseOpts()});
+  setCap('cHora',conCapCommon(sec));}
+function conDia(){const sec=conSec.cDia,dia=aggDim(D.factDia,8,sec),grid=css('--line'),tick=css('--ink-lo'),dgr=css('--red');
+  mk('cDia',{type:'bar',data:{labels:M.dias,datasets:[{label:'Siniestros',data:M.dias.map((_,i)=>dia.s[i+1]),backgroundColor:css('--teal'),borderRadius:4},
+    {type:'line',label:'Fallecidos',data:M.dias.map((_,i)=>dia.m[i+1]),borderColor:dgr,backgroundColor:dgr,borderWidth:2,tension:.3,yAxisID:'y1'}]},
+    options:{...baseOpts(),scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:tick}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
+  setCap('cDia',conCapCommon(sec));}
 function renderCharts(A){
   const acc=css('--accent'),teal=css('--teal'),dgr=css('--red'),tick=css('--ink-lo'),grid=css('--line');
   const anios=M.anios;
@@ -697,30 +737,13 @@ function renderCharts(A){
     datasets:[{label:'Siniestros',data:regs.map(r=>regNat.get(r.cod)||0),
       backgroundColor:regs.map(r=>hl.has(r.cod)?acc:css('--ink-lo')),borderRadius:4}]},
     options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.x)+(hl.has(regs[c.dataIndex].cod)?'  ◆ ámbito elegido':'')}}}}});
-  // Por MODO involucrado (siniestros)
-  mk('cModo',{type:'bar',data:{labels:M.modos,datasets:[{label:'Siniestros',data:A.porModo,
-    backgroundColor:M.modos.map((_,i)=>PAL_M[i]),borderRadius:5}]},
-    options:withPct({...baseOpts(),plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Siniestros: '+fmt(c.parsed.y)}}}},{horizontal:false})});
-  // Por tipo de siniestro
-  const tD=aggDim(D.factTipo,M.tipos.length);
-  const ti=M.tipos.map((t,i)=>[cap(t),tD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
-  mk('cTipo',{type:'bar',data:{labels:ti.map(x=>x[0]),datasets:[{label:'Siniestros',data:ti.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},
-    options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
-  // Principales causas (clasificación agrupada CONASET)
-  const cD=aggDim(D.factCausa,M.causas.length);
-  const ci=M.causas.map((c,i)=>[cap(c),cD.s[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  mk('cCausa',{type:'bar',data:{labels:ci.map(x=>x[0]),datasets:[{label:'Siniestros',data:ci.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
-    options:withPct({...baseOpts(),indexAxis:'y'},{horizontal:true})});
+  // Estacionalidad por mes (sin selector de zona)
   const mes=aggDim(D.factMes,13),ML=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   mk('cMes',{type:'bar',data:{labels:ML.slice(1),datasets:[{label:'Siniestros',data:mes.s.slice(1),backgroundColor:acc,borderRadius:4}]},options:baseOpts()});
-  const hora=aggDim(D.factHora,24);
-  mk('cHora',{type:'bar',data:{labels:[...Array(24).keys()].map(h=>h+'h'),datasets:[{label:'Siniestros',data:hora.s,backgroundColor:acc,borderRadius:3}]},options:baseOpts()});
-  const dia=aggDim(D.factDia,8);
-  mk('cDia',{type:'bar',data:{labels:M.dias,datasets:[{label:'Siniestros',data:M.dias.map((_,i)=>dia.s[i+1]),backgroundColor:teal,borderRadius:4},
-    {type:'line',label:'Fallecidos',data:M.dias.map((_,i)=>dia.m[i+1]),borderColor:dgr,backgroundColor:dgr,borderWidth:2,tension:.3,yAxisID:'y1'}]},
-    options:{...baseOpts(),scales:{x:{grid:{color:grid},ticks:{color:tick}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:tick}},y1:{position:'right',grid:{display:false},ticks:{color:dgr},beginAtZero:true}}}});
-  // Pies de figura: agregados llevan "suma <años>"; la evolución anual no (los años son el eje).
-  stampCaptions(['cModo','cTipo','cCausa','cMes','cHora','cDia'],state.anios,{suma:true,withModo:true});
+  stampCaptions(['cMes'],state.anios,{suma:true,withModo:true});
+  // gráficos con selector Total / Urbano / Rural (comportamiento por zona)
+  conSecCtrl('cModo',conModo); conSecCtrl('cTipo',conTipo); conSecCtrl('cCausa',conCausa); conSecCtrl('cHora',conHora); conSecCtrl('cDia',conDia);
+  conModo(); conTipo(); conCausa(); conHora(); conDia();
   stampCaptions(['cAnio'],state.anios,{suma:false,withModo:true});
   setCap('cRegion','Todas las regiones de Chile · '+figCaption(state.anios,{suma:true,withModo:true}).split(' · ').slice(1).join(' · '));
 }
@@ -982,6 +1005,51 @@ function renderOS2(){
   return renderOS2Sin();
 }
 
+// --- Selector por figura Total/Urbano/Rural (facts O.S.2 keyed por sector en índice 2) ---
+const os2Sec={cModoO:-1,cLetO:-1,cTipoO:-1,cVehO:-1,cCausaO:-1};
+function oAggS(fact,sec,cb){const S=os2ScopeSet();for(const r of fact){if((S===null||S.has(r[0]))&&state.anios.has(r[1])&&(sec<0||r[2]===sec))cb(r);}}
+function secTag(sec){return sec<0?'':(sec===0?' · zona urbana':' · zona rural');}
+function os2SecCtrl(chartId,fn){
+  const card=$('#'+chartId)&&$('#'+chartId).closest('.card');if(!card||card.querySelector('.sectoggle'))return;
+  const box=document.createElement('div');box.className='seg sectoggle';box.style.cssText='margin:0 0 9px;font-size:.74rem';
+  box.innerHTML=[['Total',-1],['Urbano',0],['Rural',1]].map(([t,v])=>`<button data-s="${v}" class="${v===os2Sec[chartId]?'on':''}">${t}</button>`).join('');
+  (card.querySelector('.desc')||card.querySelector('h2')).after(box);
+  box.querySelectorAll('button').forEach(b=>b.onclick=()=>{box.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');os2Sec[chartId]=+b.dataset.s;fn();});
+}
+function os2Tipo(){const sec=os2Sec.cTipoO,NB=OS2M.tipos.length,tN=new Array(NB).fill(0);
+  oAggS(OS2.factSin,sec,r=>{tN[r[3]]+=r[4];});
+  const to=OS2M.tipos.map((t,i)=>[t,tN[i]]).sort((a,b)=>b[1]-a[1]);
+  mk('cTipoO',{type:'bar',data:{labels:to.map(x=>x[0]),datasets:[{data:to.map(x=>x[1]),backgroundColor:css('--teal'),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
+  setCap('cTipoO',os2Cap()+secTag(sec));}
+function os2Modo(){const sec=os2Sec.cModoO,NM=OS2M.modosSev.length,moN=new Array(NM).fill(0);
+  oAggS(OS2.factModo,sec,r=>{moN[r[3]]+=r[4];});
+  const md=OS2M.modosSev.map((m,i)=>[m,moN[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);
+  mk('cModoO',{type:'bar',data:{labels:md.map(x=>x[0]),datasets:[{data:md.map(x=>x[1]),backgroundColor:css('--navy'),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
+  setCap('cModoO',os2Cap()+secTag(sec));}
+function os2Let(){const sec=os2Sec.cLetO,dgr=css('--red'),orC=css('--or'),navy=css('--navy'),tick=css('--ink-lo'),grid=css('--line');
+  const NM=OS2M.modosSev.length,moN=new Array(NM).fill(0),moF=new Array(NM).fill(0);
+  oAggS(OS2.factModo,sec,r=>{moN[r[3]]+=r[4];moF[r[3]]+=r[5];});
+  const ml=OS2M.modosSev.map((m,i)=>({m,let:moN[i]?100*moF[i]/moN[i]:0,n:moN[i]})).filter(x=>x.n>0).sort((a,b)=>b.let-a.let);
+  mk('cLetO',{type:'bar',data:{labels:ml.map(x=>x.m),datasets:[{data:ml.map(x=>x.let),
+    backgroundColor:ml.map(x=>x.m==='Peatón'?dgr:(x.m==='Motocicleta'||x.m==='Bicicleta')?orC:navy),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Letalidad: '+fmt1(c.parsed.x)+'% · '+fmt(ml[c.dataIndex].n)+' siniestros'}},datalabels:valLabels({suffix:'%',horizontal:true})},
+      scales:{x:{beginAtZero:true,grace:'12%',grid:{color:grid},ticks:{color:tick,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:tick}}}}});
+  setCap('cLetO',os2Cap()+secTag(sec));}
+function os2Veh(){const sec=os2Sec.cVehO,NV=OS2M.modos.length,vN=new Array(NV).fill(0);
+  oAggS(OS2.factVeh,sec,r=>{vN[r[3]]+=r[4];});
+  const vo=OS2M.modos.map((m,i)=>[m,vN[i]]).sort((a,b)=>b[1]-a[1]);
+  mk('cVehO',{type:'bar',data:{labels:vo.map(x=>x[0]),datasets:[{data:vo.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
+  setCap('cVehO',os2Cap()+secTag(sec));}
+function os2Causa(){const sec=os2Sec.cCausaO,NC=OS2M.causas.length,caN=new Array(NC).fill(0);
+  oAggS(OS2.factCausa,sec,r=>{caN[r[3]]+=r[4];});
+  const co=OS2M.causas.map((c,i)=>[c,caN[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  mk('cCausaO',{type:'bar',data:{labels:co.map(x=>x[0]),datasets:[{data:co.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
+    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
+  setCap('cCausaO',os2Cap()+secTag(sec));}
+
 function renderOS2Sin(){
   const tick=css('--ink-lo'),grid=css('--line'),dgr=css('--red'),navy=css('--navy'),orC=css('--or'),teal=css('--teal'),pur=css('--navy2');
   const NB=OS2M.tipos.length;
@@ -1015,41 +1083,15 @@ function renderOS2Sin(){
   mk('cSectorO',{type:'doughnut',data:{labels:['Urbano','Rural'],datasets:[{data:[urb,rur],backgroundColor:[navy,orC],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{color:tick}},
       datalabels:{display:true,color:'#fff',font:{weight:'700'},formatter:v=>(urb+rur)?(100*v/(urb+rur)).toFixed(0)+'%':''}}}});
-  // tipo
-  const to=OS2M.tipos.map((t,i)=>[t,tipoN[i]]).sort((a,b)=>b[1]-a[1]);
-  mk('cTipoO',{type:'bar',data:{labels:to.map(x=>x[0]),datasets:[{data:to.map(x=>x[1]),backgroundColor:teal,borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
-  // modo + letalidad
-  const NM=OS2M.modosSev.length,moN=new Array(NM).fill(0),moF=new Array(NM).fill(0);
-  oAgg(OS2.factModo,r=>{moN[r[2]]+=r[3];moF[r[2]]+=r[4];});
-  const modoData=OS2M.modosSev.map((m,i)=>({m,n:moN[i],f:moF[i],let:moN[i]?100*moF[i]/moN[i]:0})).filter(x=>x.n>0);
-  const md=[...modoData].sort((a,b)=>b.n-a.n);
-  mk('cModoO',{type:'bar',data:{labels:md.map(x=>x.m),datasets:[{data:md.map(x=>x.n),backgroundColor:navy,borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
-  const ml=[...modoData].sort((a,b)=>b.let-a.let);
-  mk('cLetO',{type:'bar',data:{labels:ml.map(x=>x.m),datasets:[{data:ml.map(x=>x.let),
-    backgroundColor:ml.map(x=>x.m==='Peatón'?dgr:(x.m==='Motocicleta'||x.m==='Bicicleta')?orC:navy),borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'Letalidad: '+fmt1(c.parsed.x)+'%'}},datalabels:valLabels({suffix:'%',horizontal:true})},
-      scales:{x:{beginAtZero:true,grace:'12%',grid:{color:grid},ticks:{color:tick,callback:v=>v+'%'}},y:{grid:{display:false},ticks:{color:tick}}}}});
-  // vehículo
-  const NV=OS2M.modos.length,vN=new Array(NV).fill(0);
-  oAgg(OS2.factVeh,r=>{vN[r[2]]+=r[3];});
-  const vo=OS2M.modos.map((m,i)=>[m,vN[i]]).sort((a,b)=>b[1]-a[1]);
-  mk('cVehO',{type:'bar',data:{labels:vo.map(x=>x[0]),datasets:[{data:vo.map(x=>x[1]),backgroundColor:pur,borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
-  // fuga
+  // fuga (dona) — sin selector
   mk('cFugaO',{type:'doughnut',data:{labels:['Se dio a la fuga','No'],datasets:[{data:[nfu,nv-nfu],backgroundColor:[dgr,css('--line-2')],borderWidth:0}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'bottom',labels:{color:tick}},
       datalabels:{display:c=>c.dataIndex===0,color:dgr,font:{weight:'700',size:15},formatter:v=>nv?(100*v/nv).toFixed(1)+'%':''}}}});
-  // causa
-  const NC=OS2M.causas.length,caN=new Array(NC).fill(0);
-  oAgg(OS2.factCausa,r=>{caN[r[2]]+=r[3];});
-  const co=OS2M.causas.map((c,i)=>[c,caN[i]]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,12);
-  mk('cCausaO',{type:'bar',data:{labels:co.map(x=>x[0]),datasets:[{data:co.map(x=>x[1]),backgroundColor:css('--navy2'),borderRadius:4}]},
-    options:{...baseOpts(),indexAxis:'y',plugins:{legend:{display:false},datalabels:valLabels({horizontal:true})}}});
-  // ranking ciudades (por año, todas las ciudades)
   renderOS2Rank();
-  os2Stamp(['cSerieO','cSectorO','cTipoO','cModoO','cLetO','cVehO','cFugaO','cCausaO','cRankO']);
+  os2Stamp(['cSerieO','cSectorO','cFugaO','cRankO']);
+  // gráficos con selector Total / Urbano / Rural (comportamiento por zona)
+  os2SecCtrl('cTipoO',os2Tipo); os2SecCtrl('cModoO',os2Modo); os2SecCtrl('cLetO',os2Let); os2SecCtrl('cVehO',os2Veh); os2SecCtrl('cCausaO',os2Causa);
+  os2Tipo(); os2Modo(); os2Let(); os2Veh(); os2Causa();
 }
 function renderOS2Rank(){
   const tick=css('--ink-lo'),grid=css('--line');
