@@ -14,3 +14,8 @@ __pycache__/
 
 # Config local de Claude Code
 .claude/
+data/OS2/
+
+# estado local de la skill columna-vertebral y recados del hub
+.columna-vertebral.json
+_hub_encargos/
