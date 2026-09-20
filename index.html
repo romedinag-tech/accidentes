@@ -461,7 +461,7 @@ footer{color:var(--ink-lo);font-size:.76rem;margin-top:28px;border-top:1px solid
 </div>
 
 <script src="data_bundle.js?v=11"></script>
-<script src="os2_bundle.js?v=3"></script>
+<script src="os2_bundle.js?v=4"></script>
 <script>
 const D=window.DATA, M=D.meta;
 const OS2=window.OS2||null, OS2M=OS2?OS2.meta:null;
@@ -1229,7 +1229,7 @@ function renderOS2Esp(){
   if(key===os2LoadedKey){os2DrawMap();return;}   // ámbito sin cambios -> solo redibuja (pudo cambiar modo/vista)
   os2LoadedKey=key;
   $('#os2mapNote').textContent='Cargando densidad…';
-  Promise.all(cods.map(c=>fetch(`data/os2hex/${String(c).padStart(2,'0')}.json?v=3`).then(r=>r.ok?r.json():[]).catch(()=>[]))).then(parts=>{
+  Promise.all(cods.map(c=>fetch(`data/os2hex/${String(c).padStart(2,'0')}.json?v=4`).then(r=>r.ok?r.json():[]).catch(()=>[]))).then(parts=>{
     let cells=[].concat(...parts);
     if(scopeCuts)cells=cells.filter(c=>scopeCuts.has(c[1]));   // solo hexágonos de las comunas del ámbito
     os2Cells=cells;os2DrawMap();
