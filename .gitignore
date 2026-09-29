@@ -19,3 +19,6 @@ data/OS2/
 # estado local de la skill columna-vertebral y recados del hub
 .columna-vertebral.json
 _hub_encargos/
+
+# consultas internas del motor (no se publican al sitio salvo pedido)
+consultas/

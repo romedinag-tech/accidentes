@@ -18,6 +18,8 @@ Personas · Análisis espacial— para las dos fuentes. Última actividad: 2026-
 Encargo del orquestador `siniestralidad.columna-vertebral-v2` (hub → siniestralidad): **respondido** en
 esta pasada; lo cierra el hub tras verificar.
 
+Consultas puntuales en [`consultas/`](consultas/_INDICE_CONSULTAS.md): dashboard CONASET de Curicó (2026-09, cerrada).
+
 ### [conaset]
 Base 2020–2025 (436.521), personas (770.414), riesgo hexagonal, análisis espacial deck.gl (puntos,
 concentración, comunas, riesgo hex, relieve KDE, red vial). Filtros Región/Comuna/Año/Zona/Modo.
